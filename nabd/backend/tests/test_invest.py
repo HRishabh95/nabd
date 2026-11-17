@@ -22,16 +22,17 @@ def tmp_data(tmp_path, monkeypatch):
     config.get_settings.cache_clear()
 
 
-def test_benchmark_sums_to_one_and_gold_matches_published_share():
+def test_benchmark_sums_to_one_and_is_a_commodity_book():
     w = reserve.benchmark_weights()
     assert abs(sum(w.values()) - 1) < 1e-9
-    assert 0.03 <= w["GLD"] <= 0.05  # AED 37.9 bn of USD 285 bn is about 3.6%
+    from app.data.universe import BY_SYMBOL
+    assert sum(v for s, v in w.items() if BY_SYMBOL[s].asset in ("commodity", "gold")) >= 0.9
 
 
 def test_tilt_is_funded_so_active_weights_net_to_zero():
-    a = risk.active_from_tilt({"XLE": 1.0, "SHEL": 0.5})
+    a = risk.active_from_tilt({"USO": 1.0, "UNG": 0.5})
     assert abs(sum(a.values())) < 1e-12
-    assert a["ESGU"] < 0 and a["ESGD"] < 0
+    assert a["GLD"] < 0 and a["DBC"] < 0  # funded from the gold and commodity sleeve
 
 
 def _fake_prices(symbols, n=900, seed=1):
@@ -97,3 +98,12 @@ def test_memory_search_with_a_committee_pack_awaiting_its_decision():
     ideas.remember(old["id"], "thesis", "AI-linked equities could crash")
     hits = ideas.search_memory("Semiconductor will crash", exclude="none")
     assert hits and hits[0]["decision"] is None
+
+
+def test_var_uses_todays_volatility_and_basel_zones():
+    from app.api.monitor import basel_zone
+    rng = np.random.default_rng(3)
+    calm, wild = rng.normal(0, 0.005, 600), rng.normal(0, 0.03, 50)
+    sig = risk.ewma_sigma(np.r_[calm, wild])
+    assert sig[-1] > 3 * sig[590]  # volatility estimate rises within weeks of the turn
+    assert [basel_zone(n) for n in (0, 4, 5, 9, 10)] == ["green", "green", "amber", "amber", "red"]

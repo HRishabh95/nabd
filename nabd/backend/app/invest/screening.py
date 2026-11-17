@@ -16,7 +16,7 @@ import numpy as np
 import pandas as pd
 
 from ..data import store
-from ..data.universe import BY_SYMBOL, UNIVERSE
+from ..data.universe import BY_SYMBOL, UNIVERSE, investable
 from ..ml.portfolio import ranker, reserve, risk
 from . import ideas, lookthrough
 
@@ -52,15 +52,15 @@ def _fit_score(inst, thesis: dict) -> tuple[float, list[str]]:
 
 
 def holdings() -> list[dict]:
-    """Equity lines held today: benchmark mandates plus the active weights of approved ideas (% of portfolio)."""
+    """Lines held today (commodities, gold, bonds): benchmark plus the active weights of approved ideas (% of portfolio)."""
     bench = reserve.benchmark_weights()
     active = ideas.active_positions()
     out = {}
     for s, w in bench.items():
-        if BY_SYMBOL.get(s) and BY_SYMBOL[s].asset == "equity":
+        if investable(s):
             out[s] = {"symbol": s, "weight_pct": w * 100, "source": "SAA mandate"}
     for s, w in active.items():
-        if BY_SYMBOL.get(s) and BY_SYMBOL[s].asset == "equity":
+        if investable(s):
             row = out.setdefault(s, {"symbol": s, "weight_pct": 0.0, "source": "Approved idea"})
             row["weight_pct"] += w * 100
             if row["source"] == "SAA mandate" and abs(w) > 1e-9:
@@ -107,7 +107,7 @@ def screen(thesis: dict, limit: int = 40) -> dict:
     rows = rows[:limit]
 
     # theme basket: the best-fitting equity matches, equal weight, as the yardstick for exposure and protection
-    theme_syms = [r["symbol"] for r in rows if r["asset"] == "equity"][:8] or [r["symbol"] for r in rows][:8]
+    theme_syms = [r["symbol"] for r in rows if investable(r["symbol"])][:8] or [r["symbol"] for r in rows][:8]
     held = holdings()
     sleeve = {h["symbol"]: h["weight_pct"] for h in held}
     # protection: whatever the thesis names, plus the standard set (Treasuries, gold, defensive equity), always
@@ -193,11 +193,12 @@ ACTIONS = ("buy", "hold_less", "protect", "study")
 
 
 def clean_proposal(p: dict) -> dict:
-    """Keep only instruments Nabd has, once each. The LLM chooses; nothing it invents reaches the screen."""
+    """Keep only instruments Nabd has and the team invests in (commodities, gold, bonds), once each. The LLM chooses;
+    nothing it invents, and no equity, reaches the screen as a candidate (equities may still measure the driver)."""
     seen, cands = set(), []
     for c in p.get("candidates", []):
         s = (c.get("symbol") or "").strip().upper()
-        if s in BY_SYMBOL and s not in seen and c.get("action") in ACTIONS:
+        if s in BY_SYMBOL and s not in seen and c.get("action") in ACTIONS and investable(s):
             seen.add(s)
             cands.append({"symbol": s, "action": c["action"], "reason": (c.get("reason") or "").strip()})
     drv = [s for s in dict.fromkeys((x or "").strip().upper() for x in p.get("driver_symbols", [])) if s in BY_SYMBOL]
@@ -291,7 +292,8 @@ def view(thesis: dict, proposal: dict) -> dict:
             "vol_1y_pct": st.get("vol_1y_pct"), "adv_usd_mn": st.get("avg_daily_value_traded_usd_mn"),
             "ml_rank_pct": rk.get(s, {}).get("rank_pct"),
         })
-    order = ("hold_less", "protect", "buy", "study") if bearish else ("buy", "protect", "hold_less", "study")
+    # what the idea is about comes first: for a bullish idea, what to buy and what to study before protection
+    order = ("hold_less", "protect", "buy", "study") if bearish else ("buy", "study", "protect", "hold_less")
     for h in held:
         h["moves_with_driver"] = beta(h["symbol"])
     exposure = sum(h["weight_pct"] * (h["moves_with_driver"] or 0) for h in held)

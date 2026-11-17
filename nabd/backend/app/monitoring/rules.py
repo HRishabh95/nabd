@@ -56,18 +56,18 @@ def model_rules() -> int:
     else:
         alerts.resolve("models", "ranker", "drift")
     last = kv.get("monitor:var") or {}
-    if last.get("exceptions_250d", 0) > last.get("limit", 4):
-        n += alerts.raise_alert("models", "risk", "var_backtest", "high",
-                                f"Risk model breached its VaR backtest limit ({last['exceptions_250d']} exceptions in 250 days, "
-                                f"limit {last['limit']})", last, link="investment")
+    if last.get("exceptions_250d", 0) >= 5:  # Basel amber zone or worse (green is 0-4 in 250 days)
+        n += alerts.raise_alert("models", "risk", "var_backtest", "high" if last["exceptions_250d"] >= 10 else "medium",
+                                f"Risk model VaR backtest: {last['exceptions_250d']} exceptions in 250 days "
+                                f"(Basel {'red' if last['exceptions_250d'] >= 10 else 'amber'} zone)", last, link="investment")
     elif last:
         alerts.resolve("models", "risk", "var_backtest")
     return n
 
 
 def forecasting_rules() -> int:
-    from ..ml.forecasting import run as fr
-    out = fr.latest()
+    from ..ml.forecasting import ai_eval
+    out = ai_eval.stored()
     if not out:
         return 0
     n = 0
@@ -76,7 +76,7 @@ def forecasting_rules() -> int:
     for tname, t in out["targets"].items():
         label = "non-oil GDP" if tname == "non_oil" else "real GDP"
         for q, lq in t["latest"].items():
-            v = (lq["models"].get("ensemble") or lq["models"].get("benchmark") or {}).get("value")
+            v = (lq["models"].get("kalman_ai") or lq["models"].get("kalman") or {}).get("value")
             if v is None:
                 continue
             key = f"{tname}:{q}"
@@ -89,15 +89,9 @@ def forecasting_rules() -> int:
             if v < 0:
                 n += alerts.raise_alert("forecasting", key, "contraction", "medium",
                                         f"Nowcast signals contraction: {q.replace('Q', ' Q')} {label} at {v:+.1f}%",
-                                        {"value": v, "bands": lq["models"].get("ensemble", {}).get("band70")}, link="forecasting")
+                                        {"value": v, "bands": (lq["models"].get("kalman_ai") or {}).get("band70")}, link="forecasting")
             else:
                 alerts.resolve("forecasting", key, "contraction")
-        champ = (t.get("champion") or {}).get("model")
-        prev_champ = seen.get("champion", {}).get(tname)
-        if champ and prev_champ and champ != prev_champ:
-            n += alerts.raise_alert("models", f"nowcast:{tname}", f"champion:{champ}", "info",
-                                    f"New champion for {label}: {champ} replaces {prev_champ}",
-                                    {"champion": t["champion"]}, link="forecasting")
         rel = len(t["released"])
         if seen.get("releases", {}).get(tname) is not None and rel > seen["releases"][tname]:
             last = t["released"][-1]
@@ -105,7 +99,6 @@ def forecasting_rules() -> int:
                                     f"FCSC published {last['quarter'].replace('Q', ' Q')} {label}: {last['value']:+.1f}%",
                                     last, link="forecasting")
     kv.set("monitor:nowcast", {"values": now, "ts": time.time(),
-                               "champion": {k: (t.get("champion") or {}).get("model") for k, t in out["targets"].items()},
                                "releases": {k: len(t["released"]) for k, t in out["targets"].items()}})
     return n
 

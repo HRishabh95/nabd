@@ -13,7 +13,7 @@ from pydantic import BaseModel, Field
 
 from ..data import store
 from ..data.connectors import edgar, gkg
-from ..data.universe import BY_SYMBOL, UNIVERSE
+from ..data.universe import BY_SYMBOL, INVESTABLE_ASSETS, UNIVERSE
 from ..llm.codex_session import Tool
 from ..llm.gateway import gateway
 from ..ml.portfolio import ranker, regime, risk
@@ -24,9 +24,10 @@ REGIONS = sorted({i.region for i in UNIVERSE})
 TAGS = sorted({t for i in UNIVERSE for t in i.tags})
 
 BASE_RULES = (
-    "You work for the reserve-management team of the Central Bank of the UAE inside Nabd. The portfolio is a "
-    "notional reserve portfolio judged against its Strategic Asset Allocation (SAA) and the Board's active risk "
-    "budget. Never state a number that did not come from a tool result or the supplied data. Do not do arithmetic "
+    "You work for the investment team of the Central Bank of the UAE inside Nabd. The portfolio is a notional "
+    "commodity book (gold, energy, industrial and precious metals, agriculture, broad commodity indices, and a small "
+    "liquidity sleeve of T-bills and inflation-linked bonds), judged against its strategic benchmark and the "
+    "Board's active risk budget. Equities are not investable. Never state a number that did not come from a tool result or the supplied data. Do not do arithmetic "
     "on figures yourself; if you need a derived figure, call the tool that computes it. Write plainly for "
     "investment professionals; British English; no hype."
 )
@@ -54,7 +55,7 @@ class Thesis(BaseModel):
     assumptions: list[str] = Field(description="How you read a short or vague idea, in plain words; empty if clear")
     horizon: Literal["tactical", "strategic"]
     committee: Literal["MRMC", "Board (SAA review)"]
-    tranche: Literal["Capital market", "Long-term investment", "Gold", "Money market"]
+    tranche: Literal["Gold", "Energy", "Industrial metals", "Precious metals", "Agriculture", "Broad commodities", "Liquidity"]
     themes: list[str] = Field(description="Theme tags chosen only from the allowed list")
     sectors: list[str] = Field(description="Sectors chosen only from the allowed list; may be empty")
     regions: list[str] = Field(description="Regions chosen only from the allowed list; may be empty")
@@ -78,11 +79,12 @@ async def parse_thesis(idea: dict, on_event=None) -> tuple[Thesis, list[dict]]:
                                  "news:fed_rates / news:gold / news:ai_capex (daily share of world news, %)",
                                  "regime:stress (probability 0-1)", "any instrument symbol (price)"],
         "related_past_ideas": memory,
-        "notes": "Tactical ideas go to the MRMC; strategic ones to the Board's SAA review. A short idea such as "
-                 "'AI crash' must still produce a full thesis: read it the way a reserve manager would (here: AI-linked "
-                 "equities could fall, so reduce or hedge that exposure) and list your reading under assumptions. The "
-                 "portfolio holds equity through broad SRI-index mandates and cannot short; express a bearish view as "
-                 "reduce or hedge.",
+        "notes": "Tactical ideas go to the MRMC; strategic ones to the Board's review of the strategic benchmark. A short idea such as "
+                 "'oil glut' must still produce a full thesis: read it the way a reserve manager would (here: crude prices "
+                 "could fall, so hold less oil or add protection) and list your reading under assumptions. The team "
+                 "invests in commodities (gold, oil, gas, metals, agriculture, broad indices), government and other "
+                 "bonds, and cash; it does not invest in equities and cannot short. Express a bearish view as hold less "
+                 "or protect.",
     }, indent=1)
     res = await gateway.run("thesis", BASE_RULES, prompt, schema=Thesis, on_event=on_event)
     return res.parsed, memory
@@ -107,27 +109,31 @@ class Proposal(BaseModel):
                                                   "track it)")
     if_right: str = Field(description="One plain sentence: what happens to the driver if the idea is right")
     candidates: list[Candidate] = Field(description="6-14 instruments for the team to look at, across asset classes "
-                                                    "where it helps (equities, government bonds, gold)")
+                                                    "where it helps (commodities, gold, government bonds, cash)")
 
 
 async def propose(idea: dict, holdings: list[dict], on_event=None) -> Proposal:
     """What the team should look at for this idea. Codex chooses; the screen then measures each choice."""
-    instruments = [f"{i.symbol} | {i.name} | {i.asset} | {i.sector} | {', '.join(i.tags)}" for i in UNIVERSE]
+    instruments = [f"{i.symbol} | {i.name} | {i.asset} | {i.sector} | {', '.join(i.tags)}" for i in UNIVERSE
+                   if i.asset in INVESTABLE_ASSETS]
+    driver_only = [f"{i.symbol} | {i.name} | {i.asset} | {i.sector}" for i in UNIVERSE if i.asset not in INVESTABLE_ASSETS]
     prompt = json.dumps({
         "task": "Read this investment idea and propose what the reserve-management team should look at.",
         "idea": idea["text"], "thesis": idea.get("thesis"),
         "portfolio_holds_today": [{"symbol": h["symbol"], "name": h["name"], "weight_pct_of_portfolio": h["weight_pct"]}
                                   for h in holdings],
-        "instruments (symbol | name | asset | sector | tags); choose only from these": instruments,
+        "instruments (symbol | name | asset | sector | tags); choose candidates only from these": instruments,
+        "for measuring the driver only (never as candidates): equities and indices": driver_only[:200],
         "rules": [
             "Use only symbols from the instruments list.",
-            "The portfolio cannot short. To act on a bearish view, hold less of what it owns (including large US and "
-            "European companies it owns through the ESGU and ESGD index funds) or add protection.",
-            "Look beyond equities when it helps: government bonds, inflation-linked bonds and gold can be the better "
-            "expression or the better protection.",
-            "Prefer broad, liquid index funds for the main expression unless single companies are the point of the idea.",
+            "The team invests in commodities, gold, bonds and cash only: candidates must be commodity, gold or bond "
+            "funds from the instruments list. Equities may be used only as driver_symbols, to measure the driver.",
+            "The portfolio cannot short. To act on a bearish view, hold less of what it owns (its gold, broad "
+            "commodities, Brent, silver, copper and bond lines) or add protection.",
+            "Prefer broad, liquid funds for the main expression (a broad commodity index, gold) unless one commodity is "
+            "the point of the idea.",
             "For protection, offer more than one kind where they make sense (for example longer Treasuries, gold, "
-            "defensive or low-volatility equities), so the measured evidence can show which actually held up.",
+            "inflation-linked bonds, short-dated bills), so the measured evidence can show which actually held up.",
             "Reasons are qualitative: no numbers. Nabd measures every candidate afterwards and shows where the data "
             "disagrees with you.",
         ],

@@ -1,181 +1,196 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { PageHeader } from '../components/Chrome';
-import CaseFlow, { ROLE, aed as aedK, eventKey, type Flow } from '../components/CaseFlow';
-import ForceNetwork from '../components/ForceNetwork';
-import type { NEdge, NNode } from '../components/NetworkCanvas';
+import CaseFlow, { aed, type Flow } from '../components/CaseFlow';
+import FraudGraph, { type Net } from '../components/FraudGraph';
+import Review from '../components/Review';
 import { api } from '../lib/api';
-import { useEvent } from '../lib/stream';
 
-type Eval = { flagged: number; precision: number; recall: number; f1: number; cases: number; rings: number; rings_whole: number; rings_fragmented: number; rings_missed: number; false_alarms: number; by_typology: Record<string, { caught: number; rings: number }> };
-type Case = { id: string; size: number; members: string[]; banks: number; bank_list: string[]; flow_aed: number; transfers: number; pass_through_share: number; median_hold_min: number | null; first: string | null; last: string | null; score: number; truth: { laundering_accounts: number; ring: string | null; typology: string | null } };
-type Method = { label: string; eval: Eval; cases: Case[]; total_cases: number };
-type Run = { created: number; run_id: string; seconds: number; params: { hold_min: number; flow_min: number; min_amount: number };
-  methods: Record<string, Method>; layout: { nodes: NNode[]; edges: NEdge[] };
-  data: { accounts: number; transfers: number; banks: string[]; days: number; start: string; laundering_accounts: number; rings: number; source: string };
-  card: { limits: string } };
-type Detail = Case & { members_detail: { account: string; bank: string; kind: string; opened_days_ago: number; in_aed: number; out_aed: number; truth: { label: number; typology: string; ring: string } }[];
-  timeline: { ts: string; src: string; dst: string; amount: number; cross_bank: number }[]; money_in_aed: number; money_out_aed: number; sources_outside: number; exits_outside: number; flow: Flow };
+// One investigation, end to end: summary → the network (rings or money flow) → the AI's grounded note.
+type Eval = { precision: number; recall: number; rings: number; rings_whole: number; cases: number };
+type Case = Net & { members: string[]; score: number; first: string; last: string; median_hold_min: number | null; pass_through_share: number };
+type Run = { run_id: string; created: number; data: { accounts: number; transfers: number; banks: string[]; days: number; start: string; rings: number };
+  summary: { transfers: number; suspicious_transfers: number; suspicious_aed: number; networks: number; accounts_in_networks: number; high_risk_accounts: number };
+  methods: { combined: { eval: Eval; cases: Case[] }; ml: { eval: Eval } } };
+type Member = { account: string; bank: string; kind: string; opened_days_ago: number; in_aed: number; out_aed: number; risk: number; role: string | null };
+type Detail = Case & { members_detail: Member[]; flow: Flow; money_in_aed: number; money_out_aed: number; sources_outside: number; exits_outside: number;
+  bank_list: string[] };
+type Note = { headline: string; why_flagged: string[]; connections?: string; pattern?: string; transfers: { ts: string; src: string; dst: string; amount: number; why: string }[];
+  next_steps: string[]; caveats: string; checked: { cited: number; matched: number }; account: string | null };
 
-const ORDER = ['rules', 'trail', 'community', 'cycles', 'ml', 'combined'];
-const SHORT: Record<string, string> = { rules: 'Rules', trail: 'Money trail', community: 'Communities', cycles: 'Cycles', ml: 'ML', combined: 'Combined' };
-const TYPO: Record<string, string> = { fan_in: 'Fan-in', fan_out: 'Fan-out', cycle: 'Cycle', scatter_gather: 'Scatter-gather', gather_scatter: 'Gather-scatter', layering: 'Layering', mule_ring: 'Mule ring' };
-const aed = (v: number) => (v >= 1e6 ? `AED ${(v / 1e6).toFixed(2)} m` : `AED ${(v / 1e3).toFixed(0)} k`);
-const time = (s: string) => new Date(s).toLocaleString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+const pct = (v: number) => `${Math.round(v * 100)}%`;
+const when = (s: string) => new Date(s.replace(' ', 'T')).toLocaleString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+const ROLE: Record<string, string> = { entry: 'Money enters here', start: 'Starts the loop', pass: 'Passes money on', exit: 'Money leaves here', single: 'Linked account' };
 
 export default function Fraud() {
   const [run, setRun] = useState<Run | null>(null);
   const [err, setErr] = useState<string | null>(null);
-  const [method, setMethod] = useState('combined');
-  const [caseId, setCaseId] = useState<string | null>(null);
+  const [open, setOpen] = useState<string | null>(null);
   const [detail, setDetail] = useState<Detail | null>(null);
-  const [truth, setTruth] = useState(false);
-  const [settings, setSettings] = useState(false);
-  const [hold, setHold] = useState(240);
-  const [flow, setFlow] = useState(0.7);
-  const [job, setJob] = useState<{ progress: number; message: string } | null>(null);
-  const [view, setView] = useState<'flow' | 'network'>('flow');
-  const [colourBy, setColourBy] = useState<'flag' | 'bank'>('flag');
-  const [picked, setPicked] = useState<string | null>(null);
-  const [step, setStep] = useState(0);
+  const [view, setView] = useState<'rings' | 'flow'>('rings');
+  const [sel, setSel] = useState<string | null>(null);
+  const [day, setDay] = useState<number | null>(null);
+  const [playing, setPlaying] = useState(false);
+  const [q, setQ] = useState('');
+  const [found, setFound] = useState<string | null>(null);
+  const [note, setNote] = useState<Note | null>(null);
+  const [noteBusy, setNoteBusy] = useState(false);
+  const [noteErr, setNoteErr] = useState<string | null>(null);
   const [active, setActive] = useState<string | null>(null);
+  const [step, setStep] = useState(0);
+  const [saw, setSaw] = useState<{ instructions: string; facts: string; characters: number; withheld: string[] } | null>(null);
+  const [safety, setSafety] = useState(false);
 
-  const load = useCallback(() => api.get<Run>('/api/fraud').then((r) => { setRun(r); setErr(null); setHold(r.params.hold_min); setFlow(r.params.flow_min); }, (e) => setErr(e.message)), []);
-  useEffect(() => { load(); }, [load]);
-  useEvent('job.progress', (e) => { if (e.data.kind === 'fraud') setJob({ progress: Number(e.data.progress), message: String(e.data.message) }); });
-  useEvent('job.done', (e) => { if (e.data.kind === 'fraud') { setJob(null); setCaseId(null); load(); } });
-  useEvent('job.failed', (e) => { if (e.data.kind === 'fraud') { setJob(null); setErr(String(e.data.error)); } });
+  useEffect(() => { api.get<Run>('/api/fraud').then((r) => { setRun(r); setOpen((o) => o ?? r.methods.combined.cases[0]?.id ?? null); }, (e) => setErr(e.message)); }, []);
   useEffect(() => {
-    setDetail(null);
-    if (caseId) api.get<Detail>(`/api/fraud/case/${method}/${caseId}`).then((d) => { setDetail(d); setStep(d.flow?.events.length ?? 0); }).catch(() => undefined);
-  }, [caseId, method]);
-  // open the strongest case of the chosen method, so the page starts with a story rather than the whole network
-  useEffect(() => { if (run && !caseId && view === 'flow') { const top = run.methods[method]?.cases[0]; if (top) setCaseId(top.id); } }, [run, method]); // eslint-disable-line react-hooks/exhaustive-deps
-  const playRow = useRef<HTMLLIElement | null>(null);
-  useEffect(() => { playRow.current?.scrollIntoView({ block: 'nearest' }); }, [step]);
+    setDetail(null); setSel(null); setNote(null); setStep(0); setActive(null); setDay(null);
+    if (!open) return;
+    api.get<Detail>(`/api/fraud/case/combined/${open}`).then((d) => { setDetail(d); setStep(d.flow.events.length); }, (e) => setErr(e.message));
+  }, [open]);
 
-  const M = run?.methods[method];
-  const flagged = useMemo(() => new Set((M?.cases ?? []).flatMap((c) => c.members)), [M]);
-  const selected = useMemo(() => new Set(M?.cases.find((c) => c.id === caseId)?.members ?? []), [M, caseId]);
-  const caseOf = useMemo(() => new Map((M?.cases ?? []).flatMap((c) => c.members.map((a) => [a, c.id] as [string, string]))), [M]);
-  async function rerun() { setJob({ progress: 0, message: 'Starting' }); try { await api.post('/api/fraud/run', { hold_min: hold, flow_min: flow, min_amount: 5000 }); } catch (e) { setErr((e as Error).message); setJob(null); } }
+  const loadNote = useCallback(async (caseId: string, account: string | null, generate: boolean) => {
+    setNoteErr(null);
+    const qs = account ? `?account=${account}` : '';
+    try { setNote(await api.get<Note>(`/api/fraud/case/${caseId}/note${qs}`)); return; } catch { /* not written yet */ }
+    if (!generate) { setNote(null); return; }
+    setNoteBusy(true);
+    try { setNote(await api.post<Note>(`/api/fraud/case/${caseId}/note${qs}`)); } catch (e) { setNoteErr((e as Error).message); } finally { setNoteBusy(false); }
+  }, []);
+  // the open network's note loads (or is written) automatically; an account's note only when asked
+  useEffect(() => { if (open) loadNote(open, null, true); }, [open, loadNote]);
 
-  if (!run || !M) {
-    return (<><PageHeader title="Fraud network" lede="Mule and laundering networks found by following the money" />
-      <div className="fill grid"><section className="card s12"><p className="note">{err ?? 'Loading…'}</p>{err && <button className="btn filled small" type="button" onClick={rerun}>Run detection</button>}</section></div></>);
+  // replay the network's growth one day at a time
+  useEffect(() => {
+    if (!playing || !run) return;
+    const t = setTimeout(() => setDay((d) => { const n = (d ?? -1) + 1; if (n >= run.data.days) { setPlaying(false); return null; } return n; }), 700);
+    return () => clearTimeout(t);
+  }, [playing, day, run]);
+
+  const cases = useMemo(() => run?.methods.combined.cases ?? [], [run]);
+  const accounts = useMemo(() => (detail?.members_detail ?? []).map((m) => ({ account: m.account, bank: m.bank, risk: m.risk, role: m.role })), [detail]);
+  const start = run ? new Date(`${run.data.start}T00:00:00Z`) : null;
+  const cutoff = start && day != null ? new Date(start.getTime() + (day + 1) * 864e5 - 1000).toISOString().slice(0, 19).replace('T', ' ') : null;
+  const member = detail?.members_detail.find((m) => m.account === sel) ?? null;
+
+  async function search(e: React.FormEvent) {
+    e.preventDefault();
+    const id = q.trim().toUpperCase();
+    if (!id) return;
+    const c = cases.find((x) => x.members.includes(id));
+    if (c) { setFound(null); setView('rings'); if (c.id !== open) { setOpen(c.id); setTimeout(() => setSel(id), 600); } else setSel(id); return; }
+    try {
+      const r = await api.get<{ risk: number; case: string | null }>(`/api/fraud/account/${id}`);
+      setFound(`${id} is not in a detected network · ML risk ${r.risk.toFixed(2)}`);
+    } catch { setFound(`${id} not found`); }
   }
-  const rules = run.methods.rules.eval, best = run.methods.combined.eval;
+
+  if (!run) return (<><PageHeader title="Fraud network" lede="Synthetic payments" /><div className="fill grid"><article className="card s12"><p className="note">{err ?? 'Loading…'}</p></article></div></>);
+  const S = run.summary, E = run.methods.combined.eval, M = run.methods.ml.eval;
+
   return (
     <>
-      <PageHeader title="Fraud network" lede={`Mule and laundering networks found by following the money · ${run.data.accounts.toLocaleString('en-GB')} accounts, ${run.data.transfers.toLocaleString('en-GB')} instant payments over ${run.data.days} days, ${run.data.banks.length} banks · ${run.data.source}`}
-        actions={<>
-          <button className="btn small" type="button" onClick={() => setSettings((s) => !s)} aria-expanded={settings}>Settings</button>
-          <button className="btn filled small" type="button" onClick={rerun} disabled={!!job}>{job ? `Running ${Math.round(job.progress * 100)}%` : 'Run detection'}</button>
-        </>} />
-      {settings && (
-        <div className="fr-settings">
-          <label>Money in and out within <b className="num">{hold} min</b><input type="range" min={30} max={720} step={30} value={hold} onChange={(e) => setHold(Number(e.target.value))} aria-label="Hold window in minutes" /></label>
-          <label>Amount passed on at least <b className="num">{Math.round(flow * 100)}%</b><input type="range" min={0.5} max={0.95} step={0.05} value={flow} onChange={(e) => setFlow(Number(e.target.value))} aria-label="Share passed on" /></label>
-          <span className="sub">Applies to the money trail and everything built on it. Run detection to apply.</span>
-        </div>
-      )}
-      {view !== 'network' && <div className="fr-headline">
-        <p><b>Rules</b> raise <b className="num">{rules.cases}</b> separate alerts and catch <b className="num">{rules.rings_whole}</b> of {rules.rings} rings whole. <b>Following the money</b> finds the same laundering as <b className="num">{best.cases}</b> cases, catches <b className="num">{best.rings_whole}</b> rings whole, and <b className="num">{Math.round(best.precision * 100)}%</b> of the accounts it flags are laundering (rules: {Math.round(rules.precision * 100)}%).</p>
-      </div>}
-      <div className={`fill grid fr-grid ${view === 'network' ? 'wide' : ''}`}>
-        <section className="card fr-net">
-          <div className="card-head fr-net-head">
-            <div className="segmented" role="tablist" aria-label="Detection method">
-              {ORDER.map((k) => <button key={k} type="button" role="tab" aria-pressed={method === k} onClick={() => { setMethod(k); setCaseId(null); }}>{SHORT[k]}</button>)}
-            </div>
-            <div className="fr-view">
-              <div className="segmented" role="tablist" aria-label="View">
-                <button type="button" role="tab" aria-pressed={view === 'flow'} disabled={!caseId} onClick={() => setView('flow')}>Money flow</button>
-                <button type="button" role="tab" aria-pressed={view === 'network'} onClick={() => setView('network')}>Whole network</button>
+      <PageHeader title="Fraud network" lede={`Synthetic payments (AMLSim-style), not real customers: ${run.data.accounts.toLocaleString('en-GB')} accounts at ${run.data.banks.length} banks over ${run.data.days} days`} />
+      <dl className="metrics fr-kpis">
+        <div className="metric"><dt>Transactions analysed</dt><dd className="num">{S.transfers.toLocaleString('en-GB')}</dd><span>every account scored by the ML model</span></div>
+        <div className="metric"><dt>Suspicious transactions</dt><dd className="num">{S.suspicious_transfers.toLocaleString('en-GB')}</dd><span className="num">{aed(S.suspicious_aed)} moved inside the networks</span></div>
+        <div className="metric"><dt>Networks detected</dt><dd className="num">{S.networks}</dd><span className="num">{S.accounts_in_networks} accounts · {E.rings_whole} of {E.rings} planted rings caught whole</span></div>
+        <div className="metric"><dt>Detection performance</dt><dd className="num">{pct(E.precision)} precise</dd><span className="num">finds {pct(E.recall)} of laundering accounts · against the synthetic labels</span></div>
+      </dl>
+      <div className="fill grid fr-main">
+        <article className="card s8 fr-net">
+          <div className="card-head">
+            <div><h2>{detail ? `${detail.id} · ${detail.pattern.label}` : 'Detected networks'}</h2>
+              <p className="sub">{detail ? `${detail.size} accounts at ${detail.banks} banks moved ${aed(detail.flow_aed)} between them in ${detail.transfers} transfers, ${when(detail.first)} to ${when(detail.last)}` : `${cases.length} networks found by following the money; click one to open it`}</p></div>
+            <div className="head-ctl">
+              <div className="segmented" role="group" aria-label="View">
+                <button type="button" aria-pressed={view === 'rings'} onClick={() => setView('rings')}>Fraud rings</button>
+                <button type="button" aria-pressed={view === 'flow'} onClick={() => setView('flow')} disabled={!detail}>Money flow</button>
               </div>
-              {view === 'network' && <div className="segmented" role="tablist" aria-label="Colour">
-                <button type="button" role="tab" aria-pressed={colourBy === 'flag'} onClick={() => setColourBy('flag')}>Risk</button>
-                <button type="button" role="tab" aria-pressed={colourBy === 'bank'} onClick={() => setColourBy('bank')}>Bank</button>
-              </div>}
-              {view === 'network' && <label className="switch small-sw"><input type="checkbox" checked={truth} onChange={(e) => setTruth(e.target.checked)} aria-label="Show labelled laundering" /> Show labels</label>}
+              <select className="popup" value={open ?? ''} onChange={(e) => setOpen(e.target.value || null)} aria-label="Network">
+                <option value="">All networks</option>
+                {cases.map((c) => <option key={c.id} value={c.id}>{c.id} · {c.pattern.label.split(':')[0]} · {aed(c.flow_aed)}</option>)}
+              </select>
+              <form onSubmit={search} className="fr-search"><input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Find account, e.g. AC04494" aria-label="Find an account" /></form>
             </div>
           </div>
-          {view === 'flow' && caseId ? (
-            detail?.flow ? <>
-              <p className="sub fr-flow-cap">Case {caseId}: {detail.size} accounts across {detail.banks} banks moved {aedK(detail.flow_aed)} between them{detail.median_hold_min != null ? `, holding money a median of ${detail.median_hold_min < 120 ? `${detail.median_hold_min} min` : `${(detail.median_hold_min / 60).toFixed(1)} h`} before passing it on` : ''}.{truth && detail.truth.typology ? ` Label: ${TYPO[detail.truth.typology] ?? detail.truth.typology}.` : ''}</p>
-              <CaseFlow flow={detail.flow} members={detail.members_detail} active={active} onActive={setActive} step={step} onStep={setStep} />
-            </> : <p className="sub">Loading the case…</p>
-          ) : (
-            <>
-              <p className="sub fr-flow-cap">{run.layout.nodes.length} accounts the methods looked at, settling by who pays whom. Accounts that trade a lot pull together; rings show up as tight knots. Click an account to select its case.</p>
-              <div className="fr-net-stage">
-                <ForceNetwork nodes={run.layout.nodes} edges={run.layout.edges} flagged={flagged} selected={selected} caseOf={caseOf} showTruth={truth}
-                  colourBy={colourBy} focusId={picked}
-                  onPick={(id) => { setPicked(id); const c = id ? caseOf.get(id) : null; setCaseId(c ?? null); }} />
-                {caseId && (() => { const c = M.cases.find((x) => x.id === caseId); return c ? (
-                  <aside className="fr-float">
-                    <div className="fr-float-head"><strong>Case {c.id}</strong><button type="button" className="link-btn" onClick={() => { setCaseId(null); setPicked(null); }} aria-label="Clear selection">Clear</button></div>
-                    <span className="sub">{c.size} accounts · {c.banks} banks · {c.transfers} transfers inside</span>
-                    <b className="num">{aed(c.flow_aed)}</b><span className="sub">moved between them{c.median_hold_min != null ? `, held a median ${c.median_hold_min < 120 ? `${c.median_hold_min} min` : `${(c.median_hold_min / 60).toFixed(1)} h`}` : ''}</span>
-                    {truth && <span className="sub">Label: {c.truth.typology ? TYPO[c.truth.typology] ?? c.truth.typology : 'not laundering'}</span>}
-                    <button type="button" className="btn small filled" onClick={() => setView('flow')}>See the money flow</button>
-                  </aside>) : null; })()}
-                {!caseId && picked && <aside className="fr-float"><strong>{picked}</strong><span className="sub">Not part of a case flagged by {SHORT[method]}. Its counterparts are highlighted.</span></aside>}
-              </div>
-            </>
-          )}
-        </section>
-        {view !== 'network' && <section className="card fr-side">
-          {!caseId ? (
-            <>
-              <div className="card-head"><div><h2>{M.label}</h2><p className="sub">{M.total_cases} cases · select one to see how the money moved</p></div></div>
-              <div className="fr-score">
-                <div><span className="sub">Cases to open</span><b className="num">{M.eval.cases}</b></div>
-                <div><span className="sub">Rings caught whole</span><b className="num">{M.eval.rings_whole} / {M.eval.rings}</b></div>
-                <div><span className="sub">Flagged that are laundering</span><b className="num">{Math.round(M.eval.precision * 100)}%</b></div>
-                <div><span className="sub">Laundering found</span><b className="num">{Math.round(M.eval.recall * 100)}%</b></div>
-              </div>
-              <ul className="scroll fr-cases">{M.cases.slice(0, 40).map((c) => (
-                <li key={c.id}><button type="button" onClick={() => { setCaseId(c.id); setView('flow'); }}>
-                  <span className="fr-case-top"><strong>{c.id}</strong><span className="num">{c.size} accounts · {c.banks} banks</span><b className="num">{aed(c.flow_aed)}</b></span>
-                  <span className="sub">{c.median_hold_min != null ? `money held ${c.median_hold_min < 120 ? `${c.median_hold_min} min` : `${(c.median_hold_min / 60).toFixed(1)} h`} (median)` : 'single account'}{truth && c.truth.typology ? ` · label: ${TYPO[c.truth.typology] ?? c.truth.typology}` : truth ? ' · label: not laundering' : ''}</span>
-                </button></li>
-              ))}</ul>
-            </>
-          ) : (
-            <>
-              <div className="card-head"><div><h2>Case {caseId}</h2><p className="sub">{detail ? `${detail.size} accounts across ${detail.banks} banks · ${detail.first ? time(detail.first) : ''} to ${detail.last ? time(detail.last) : ''}` : 'Loading…'}</p></div>
-                <button className="btn small" type="button" onClick={() => setCaseId(null)}>All cases</button></div>
-              {detail && (
-                <div className="scroll fr-detail">
-                  <div className="fr-score">
-                    <div><span className="sub">Money in from outside</span><b className="num">{aed(detail.money_in_aed)}</b><span className="sub">{detail.sources_outside} senders</span></div>
-                    <div><span className="sub">Moved inside the case</span><b className="num">{aed(detail.flow_aed)}</b><span className="sub">{detail.transfers} transfers</span></div>
-                    <div><span className="sub">Money out to outside</span><b className="num">{aed(detail.money_out_aed)}</b><span className="sub">{detail.exits_outside} recipients</span></div>
-                  </div>
-                  <h4>How the money moved</h4>
-                  <ol className="fr-timeline">{(detail.flow?.events ?? []).map((t, i) => {
-                    const k = eventKey(t), now = i === step - 1 && step < (detail.flow?.events.length ?? 0);
-                    return (
-                      <li key={i} ref={now ? playRow : undefined} className={`${now ? 'now' : ''} ${active === k ? 'hot' : ''} ${i >= step ? 'later' : ''}`}
-                        onPointerEnter={() => setActive(k)} onPointerLeave={() => setActive(null)} onClick={() => setStep(i + 1)}>
-                        <span className="sub num">{time(t.ts)}</span>
-                        <span className="num">{t.kind === 'in' ? <><span className="fr-kind in">In</span>{t.dst}</> : t.kind === 'out' ? <><span className="fr-kind out">Out</span>{t.src}</> : <>{t.src} → {t.dst}</>}</span>
-                        <b className="num">{aed(t.amount)}</b>{t.kind === 'inside' && t.cross_bank ? <span className="pill small-pill">Cross-bank</span> : <span />}
-                      </li>
-                    );
-                  })}</ol>
-                  <h4>Accounts</h4>
-                  <table className="fr-members"><tbody>{detail.members_detail.map((m) => (
-                    <tr key={m.account}><td className="num"><strong>{m.account}</strong></td><td>{m.bank}</td><td className="sub">{(() => { const r = detail.flow?.nodes.find((n) => n.id === m.account)?.role; return r ? <><i className="fr-role" style={{ background: ROLE[r].color }} />{ROLE[r].label} · </> : null; })()}{m.kind}, opened {m.opened_days_ago} days ago</td>
-                      <td className="r num">in {aed(m.in_aed)}</td><td className="r num">out {aed(m.out_aed)}</td>{truth && <td>{m.truth.label ? <span className="pill red small-pill">{TYPO[m.truth.typology] ?? m.truth.typology}</span> : <span className="pill small-pill">Not labelled</span>}</td>}</tr>
-                  ))}</tbody></table>
+          {found && <p className="note">{found}</p>}
+          <div className="fr-canvas">
+            {view === 'rings' || !detail
+              ? <FraudGraph nets={cases} open={open} flow={detail?.flow ?? null} accounts={accounts} selected={sel} cutoff={cutoff} onOpen={(id) => { setOpen(id); setView('rings'); }} onSelect={setSel} />
+              : <CaseFlow flow={detail.flow} members={detail.members_detail} active={active} onActive={setActive} step={step} onStep={setStep} lanes />}
+          </div>
+          <div className="fr-foot">
+            {view === 'rings' ? (<>
+              <button className="btn small filled fr-play" type="button" onClick={() => { if (!playing && day == null) setDay(0); setPlaying((p) => !p); }} aria-pressed={playing}>{playing ? 'Pause' : 'Play the days'}</button>
+              <label className="fr-time"><span>Transfers up to <b>{day == null ? 'the end' : new Date(start!.getTime() + day * 864e5).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}</b></span>
+                <input type="range" min={0} max={run.data.days} value={day ?? run.data.days} onChange={(e) => { setPlaying(false); const v = Number(e.target.value); setDay(v >= run.data.days ? null : v); }} aria-label="Show transfers up to this day" /></label>
+              <ul className="fr-legend"><li><i className="r9" />ML risk ≥ 0.9</li><li><i className="r6" />0.6–0.9</li><li><i className="r2" />0.25–0.6</li><li><i className="ring" />money enters or leaves</li><li><i className="badge">①</i>order of transfers</li><li><span className="tr-pair"><i className="tr-down" /><i className="tr-up" /></span>traced onward / back</li></ul>
+            </>) : <p className="note">Left to right in time, one row per bank: a move between rows is a cross-bank transfer. Press Replay to watch the money move.</p>}
+          </div>
+        </article>
+        <article className="card s4 fr-ai">
+          <div className="card-head"><div><h2>AI investigation</h2><p className="sub">Written from this network’s transfers and the models’ results · synthetic data</p></div></div>
+          <div className="scroll fr-ai-body">
+            {member && (
+              <section className="fr-acct">
+                <div className="fr-acct-top"><b>{member.account}</b><span className={`fr-risk ${member.risk >= 0.9 ? 'hi' : member.risk >= 0.6 ? 'mid' : ''}`}>ML risk {member.risk.toFixed(2)}</span></div>
+                <p className="sub">{member.bank} · {member.kind} · opened {member.opened_days_ago} days ago · {ROLE[member.role ?? 'single']}</p>
+                <p className="num fr-acct-flow">In {aed(member.in_aed)} · out {aed(member.out_aed)}</p>
+                {note?.account !== member.account
+                  ? <button className="btn small" type="button" disabled={noteBusy} onClick={() => loadNote(open!, member.account, true)}>Explain this account</button>
+                  : <button className="btn small" type="button" onClick={() => loadNote(open!, null, true)}>Back to the network note</button>}
+              </section>
+            )}
+            {!open && <p className="note">Open a network to see why it was flagged.</p>}
+            {noteBusy && <p className="note fr-busy">The AI is reading {detail ? `${detail.transfers} transfers between ${detail.size} accounts` : 'the transfers'}…</p>}
+            {noteErr && <p className="note worse">{noteErr}</p>}
+            {note && !noteBusy && (
+              <>
+                <p className="fr-lead">{note.headline}</p>
+                <h3>Why it was flagged</h3>
+                <ul className="fr-why">{note.why_flagged.map((w, i) => <li key={i}>{w}</li>)}</ul>
+                <h3>Pattern and connections</h3>
+                <p className="fr-p">{note.connections ?? note.pattern}</p>
+                <h3>Suspicious transfers</h3>
+                <ul className="fr-tx">{note.transfers.map((t, i) => (
+                  <li key={i}><button type="button" onClick={() => { setView('rings'); setSel(t.src); }} title="Trace this account in the network">
+                    <span className="num">{when(t.ts)}</span><span className="fr-tx-path">{t.src} → {t.dst}</span><b className="num">{aed(t.amount)}</b></button>
+                    <p>{t.why}</p></li>))}</ul>
+                <h3>What to examine next</h3>
+                <ol className="fr-next">{note.next_steps.map((s, i) => <li key={i}>{s}</li>)}</ol>
+                <p className="note">{note.caveats}</p>
+                <Review kind="fraud_note" refId={`${run.run_id}:${open}:${note.account ?? ''}`} label="Was this note useful to an investigator?" />
+                <div className="fr-ai-tools">
+                  <button className="btn small" type="button" onClick={async () => setSaw(await api.get(`/api/fraud/case/${open}/facts${note.account ? `?account=${note.account}` : ''}`))}>What the AI saw</button>
+                  <button className="btn small" type="button" aria-expanded={safety} onClick={() => setSafety((v) => !v)}>Real payment data: how it stays safe</button>
                 </div>
-              )}
-            </>
-          )}
-        </section>}
+                {safety && (
+                  <ul className="fr-safety">
+                    <li><b>Data stays inside CBUAE.</b> Detection (the ML score and following the money) is ordinary Python that runs where the data is; nothing leaves the network.</li>
+                    <li><b>Accounts are codes.</b> Account and customer identifiers are replaced by keyed pseudonyms before analysis; only CBUAE holds the key to reverse them, for a case an investigator opens.</li>
+                    <li><b>The AI sees only one network.</b> A note is written from that network’s transfers (amounts, times, banks, scores), never names, IDs or the wider ledger. <i>What the AI saw</i> shows the exact text.</li>
+                    <li><b>The AI model runs inside the boundary.</b> In production the same gateway points to an on-premise model or Azure OpenAI in the UAE; this demo uses OpenAI through Codex and therefore synthetic data only.</li>
+                    <li><b>Every note is logged and checked.</b> Who asked, when, which model; cited transfers are matched to the data before display.</li>
+                  </ul>
+                )}
+                <p className="note fr-check">Checked: {note.checked.matched} of {note.checked.cited} cited transfers match the data{note.checked.matched < note.checked.cited ? '; the rest were removed' : ''}. The AI did not see the synthetic labels.</p>
+              </>
+            )}
+            <p className="note fr-models">How it was found: gradient-boosted trees score each account’s behaviour (alone: {pct(M.precision)} precise, finds {pct(M.recall)}); following the money through pass-through and circular transfers groups accounts into networks, keeping those the score agrees with.</p>
+          </div>
+        </article>
       </div>
-      {err && <p className="note worse">{err}</p>}
+      {saw && (
+        <div className="lab-backdrop" onClick={() => setSaw(null)}>
+          <div className="lab" role="dialog" aria-modal="true" aria-label="What the AI saw" onClick={(e) => e.stopPropagation()}>
+            <div className="lab-head"><div><h2>What the AI saw</h2><p className="sub">The complete input for this note: {saw.characters.toLocaleString('en-GB')} characters of facts plus the instructions</p></div>
+              <button className="btn small" type="button" onClick={() => setSaw(null)} autoFocus>Close</button></div>
+            <h3 className="fr-saw-h">Not sent</h3>
+            <ul className="fr-why">{saw.withheld.map((w) => <li key={w}>{w}</li>)}</ul>
+            <h3 className="fr-saw-h">Instructions</h3><pre className="fr-saw">{saw.instructions}</pre>
+            <h3 className="fr-saw-h">Facts</h3><pre className="fr-saw">{saw.facts}</pre>
+          </div>
+        </div>
+      )}
     </>
   );
 }

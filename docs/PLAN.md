@@ -583,6 +583,68 @@ scrolling.
   "Use this split" adopts it and reruns portfolio fit, clearing stale stress and committee results.
 - The SRI warning now applies to equities only (gold and bonds are outside SRI screening).
 
+### Added 17 Nov: a Kalman nowcast, and what AI adds to it
+
+CBUAE already forecasts GDP, so the question for the demo is what AI adds. The Forecasting page now shows one model,
+Kalman, with and without AI news, against the IMF World Economic Outlook. The old models (factor bridge, MIDAS, ridge
+bridge, GDELT news regression, ensemble), the leaderboard and the 54-minute run are gone; the whole run takes about
+12 seconds. Pieces:
+
+- **Kalman state-space nowcast** (`ml/forecasting/kalman.py`): a dynamic factor model with quarterly GDP inside the
+  state, run through the Kalman filter and smoother. Mixed frequency and the ragged edge are handled in one pass;
+  GDP's own persistent component carries the last releases forward; GDP's weights on the factors are kept at zero
+  or above (an economic sign restriction: before 2026 the sample has no recession to pin the sign down). Two-step
+  estimation (Doz, Giannone and Reichlin), so a nowcast takes about 0.1 s and the backtest refits at every date.
+  The nowcast splits exactly into one contribution per input, and a revision into each input's new data plus
+  re-estimation.
+- **AI news signal** (`ml/forecasting/ai_news.py`): UAE business headlines from a fixed sample of GDELT GKG files
+  (16 per month since 2020) and the live feed, labelled by the LLM for relevance, sector and direction (-2 to +2).
+  Labelling is blind to dates: headlines from different months are shuffled together without dates or sources.
+  Daily averages become two monthly indicators, non-oil and oil, published with a one-day lag.
+- **Nowcast run** (`ml/forecasting/ai_eval.py`): hard data only, plus AI news (and GDELT tone, scored but not shown); scored in pseudo real
+  time against first releases at three points per quarter, with coverage of the model's own 70% and 90% bands, and
+  with and without the Q2 2026 contraction.
+
+The page shows the next two quarters with and without AI, the track record and forecast to the end of next year on
+one chart, full-year real GDP against the IMF (with what the unpublished quarters would need to average for the IMF to
+be right), an exact "why it moved" breakdown, the AI signal by month, and every headline the AI read with its label.
+IMF figures come from `data/manual/imf_weo_uae.csv` (the IMF site blocks automated access; one row per vintage).
+
+### Added 17 Nov: the fraud page is one investigation
+
+Three areas only: a four-number summary, one large network, and an AI investigation panel. Two approaches are kept:
+the gradient-boosted account score (scikit-learn histogram gradient boosting, the XGBoost family, cross-fitted by
+ring) and graph detection (money trail plus cycles, kept where the score agrees). The rules, community and cycle-only
+methods still run inside `detect.py` as building blocks and benchmarks but are off the page; so are the run settings
+and the 900-node whole-network layout.
+
+- **Fraud rings view** (`components/FraudGraph.tsx`, SVG with d3-force): every detected network is a bubble; the open
+  one shows its accounts (colour = ML risk, ring = where money enters or leaves) and numbered arrows in time order,
+  with the outside money in and out. Click an account to trace money onward (orange) and back (blue); drag to move;
+  a day slider replays the network's growth.
+- **Money flow view** (`CaseFlow`, now with one row per bank): left to right in time, so a cross-bank hop is a move
+  between rows (after arXiv:2605.10522's tabular sequential layout).
+- **Pattern** of each network (circular flow, layering chain, fan-in, fan-out, scatter-gather, gather-scatter) is read
+  from the direction of its transfers (`run.pattern`), never from the labels.
+- **AI investigation** (`ml/fraud/explain.py`): Codex writes a note from the network's accounts, transfers, outside
+  flows, hold times and ML scores, without the labels; every cited transfer is checked against the data and dropped if
+  it does not match. Notes are cached per run; the top network's note loads with the page; an account note on request.
+
+### Added 17 Nov: answers for economists, the CRO and the investment team
+
+- **Test the nowcast** (`ml/forecasting/explore.py`, Forecasting drawer): switch inputs on and off and re-run the
+  same pseudo real-time backtest (about 3 seconds); upload CBUAE's own past nowcasts (template provided) to score
+  them next to Kalman + AI news and the average of the two.
+- **Governance page** (`monitoring/governance.py`): model inventory with status and live evidence; a validation pack
+  per model generated from its card and recorded runs (purpose to sign-off; not a validation); AI evaluation from the
+  checks every run already makes; human 👍/👎 review on research, fraud notes and Ask Nabd answers; a blind
+  headline-labelling screen that measures the AI's news labels against analysts (agreement and kappa).
+- **Fraud data safety**: *What the AI saw* shows the exact input of a note and what is never sent; a short panel on
+  how real payment data would stay inside CBUAE.
+- **Commodities, gold and bonds**: the investment universe (`universe.INVESTABLE_ASSETS`) and the notional SAA
+  (money market 25%, bonds 65%, gold 4%, commodities 6%). Equities stay as data for the nowcast and markets but are
+  never proposed or traded; the risk sleeve that funds tilts is gold plus commodities.
+
 ## 6. Monitoring and alerts
 
 Async loops in the FastAPI lifespan (TradingMaus pattern) or APScheduler:

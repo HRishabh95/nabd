@@ -1,5 +1,6 @@
 // Deep research: the live view while it runs in the background, and the verified report.
 import { useEffect, useState } from 'react';
+import Review from '../../components/Review';
 import { api } from '../../lib/api';
 import { register, subscribe } from '../../lib/stream';
 import type { Deep, DeepPoint, EvidenceItem, Idea, Verdict } from '../../lib/invest';
@@ -174,7 +175,10 @@ function SplitView({ idea, split, onUsed }: { idea: Idea; split: NonNullable<Dee
   return (
     <div className="split-view">
       <div className="split-head"><h4>Proposed split</h4>
-        <button className="btn small filled" type="button" disabled={busy} onClick={use}>{busy ? 'Applying…' : 'Use this split'}</button></div>
+        {split.lines.some((l) => l.weight_pct)
+          ? <button className="btn small filled" type="button" disabled={busy} onClick={use}>{busy ? 'Applying…' : 'Use this split'}</button>
+          : <span className="pill">No trade advised</span>}</div>
+      {!split.lines.some((l) => l.weight_pct) && <p className="note">The research found the evidence too weak to put money behind any of these: it advises keeping them as research only.</p>}
       <p className="sub">Proposed by the research from its verified findings; the limits are enforced and the effect computed by Nabd. Using it replaces the selection and reruns portfolio fit.</p>
       <ul className="split-lines">{split.lines.map((l) => (
         <li key={l.symbol}><b className="num">{size(l.weight_pct)}</b><span><strong>{l.name}</strong> <span className="sub">({l.symbol}) · selected: {l.research_only_before ? 'research only' : size(l.selected_pct)}</span></span><span className="sub">{l.why}</span></li>
@@ -238,6 +242,7 @@ export function DeepReport({ idea, onRerun }: { idea: Idea; onRerun: () => void 
           {tab === 'report' && (
             <>
               <p className="lead"><Cited text={s.summary} ev={ev} open={setOpen} /></p>
+              <Review kind="research" refId={`${idea.id}:${d.finished ?? d.started ?? ''}`} label="Was this research useful?" />
               <table className="verdicts"><tbody>{s.hypotheses.map((h) => (
                 <tr key={h.id}><td><strong>{h.id}</strong></td><td><span className={`pill ${VERDICT[h.verdict][0]}`}>{VERDICT[h.verdict][1]}</span></td>
                   <td><Confidence v={h.confidence} /></td><td>{h.one_line}</td></tr>

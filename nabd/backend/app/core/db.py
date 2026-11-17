@@ -23,19 +23,36 @@ CREATE TABLE IF NOT EXISTS llm_calls (
 """
 
 _lock = threading.Lock()
-_conn: sqlite3.Connection | None = None
+_conn: sqlite3.Connection | None = None  # first connection; tests set it to None to ask for fresh connections
+_gen = 0
+_local = threading.local()
+
+
+def _open(path: str, schema: bool) -> sqlite3.Connection:
+    c = sqlite3.connect(path, check_same_thread=False, isolation_level=None, timeout=15)
+    c.row_factory = sqlite3.Row
+    c.execute("PRAGMA journal_mode=WAL")
+    c.execute("PRAGMA foreign_keys=ON")
+    c.execute("PRAGMA busy_timeout=15000")
+    if schema:
+        c.executescript(SCHEMA)
+    return c
 
 
 def conn() -> sqlite3.Connection:
-    global _conn
+    """One connection per thread. A single shared connection breaks when a background job writes while a request
+    reads ("bad parameter or other API misuse"); WAL lets each thread read while one writes."""
+    global _conn, _gen
+    path = str(get_settings().db_path)
     with _lock:
-        if _conn is None:
-            _conn = sqlite3.connect(get_settings().db_path, check_same_thread=False, isolation_level=None)
-            _conn.row_factory = sqlite3.Row
-            _conn.execute("PRAGMA journal_mode=WAL")
-            _conn.execute("PRAGMA foreign_keys=ON")
-            _conn.executescript(SCHEMA)
-        return _conn
+        if _conn is None or getattr(_local, "path", path) != path:
+            _gen += 1
+            _conn = _open(path, schema=True)
+            _local.c, _local.gen, _local.path = _conn, _gen, path
+            return _conn
+    if getattr(_local, "c", None) is None or _local.gen != _gen or _local.path != path:
+        _local.c, _local.gen, _local.path = _open(path, schema=False), _gen, path
+    return _local.c
 
 
 class Store:

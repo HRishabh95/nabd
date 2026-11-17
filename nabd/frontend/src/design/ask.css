@@ -47,3 +47,28 @@
 .ch-table td, .ch-table th { padding: 3px 6px; font-size: var(--fs-subhead); }
 
 @media (max-width: 700px) { .ask { left: 16px; right: 16px; width: auto; } }
+
+/* Ask Nabd full page */
+.ap-grid { display: grid; grid-template-columns: 260px minmax(0, 1fr) 300px; gap: 12px; min-height: 0; }
+.ap-side, .ap-me { display: flex; flex-direction: column; gap: 10px; min-height: 0; }
+.ap-find, .ap-add input { height: 32px; padding: 0 10px; border: 1px solid var(--sep); border-radius: 10px; background: var(--fill-2); font: inherit; font-size: var(--fs-callout); }
+.ap-threads { display: grid; gap: 2px; align-content: start; min-height: 0; }
+.ap-threads button { all: unset; box-sizing: border-box; width: 100%; display: grid; gap: 1px; padding: 8px 10px; border-radius: 10px; cursor: pointer; }
+.ap-threads button:hover { background: var(--fill-2); }
+.ap-threads button[aria-current="true"] { background: var(--tint-soft); }
+.ap-threads button:focus-visible { outline: 3px solid rgba(140, 106, 60, .4); }
+.ap-title { font-size: var(--fs-callout); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ap-chat { display: flex; flex-direction: column; min-height: 0; padding: 0; overflow: hidden; }
+.ask-embedded { position: static; inset: auto; width: auto; height: 100%; max-height: none; transform: none; box-shadow: none; border-radius: 0; background: transparent; display: flex; flex-direction: column; min-height: 0; }
+.ap-me h2 { font-size: var(--fs-title3); }
+.ap-me h3 { margin-top: 6px; font-size: var(--fs-subhead); font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--label-2); }
+.ap-style { font-size: var(--fs-callout); line-height: 1.45; padding: 8px 10px; border-radius: 10px; background: var(--fill-2); }
+.ap-mem { display: grid; gap: 6px; }
+.ap-mem li { display: flex; justify-content: space-between; gap: 8px; font-size: var(--fs-callout); padding-bottom: 6px; border-bottom: 1px solid var(--sep); }
+.ap-add { display: flex; gap: 6px; }
+.ap-add input { flex: 1; min-width: 0; }
+@media (max-width: 1100px), (max-height: 740px) {
+  .ap-grid { grid-template-columns: minmax(0, 1fr); flex: none; }
+  .ap-chat { min-height: 560px; }
+  .ap-threads { max-height: 220px; }
+}

@@ -28,10 +28,13 @@ def _idea(direction="underweight"):
     return ideas.get(i["id"])
 
 
-def test_research_only_selection_is_flagged():
-    p = flow.preview(_idea(), [{"symbol": "NVDA", "research_only": True}], "cash")
-    assert p["trades"] == [] and p["research_only"][0]["symbol"] == "NVDA"
-    assert "Nothing is traded" in p["warnings"][0] and p["risk"] is None
+def test_research_only_names_are_tested_at_their_test_size():
+    p = flow.preview(_idea(), [{"symbol": "GLD", "research_only": True, "test_pct": 0.5}], "cash")
+    assert p["research_only"][0]["symbol"] == "GLD"
+    assert p["hypothetical"] == {"GLD": 0.5} and p["risk"] is not None  # fit and stress have something to test
+    tested, hypo = flow.tested_lines({"items": [{"symbol": "DBC", "weight_pct": 1.0},
+                                                {"symbol": "GLD", "weight_pct": 0, "research_only": True}]})
+    assert tested == {"DBC": 1.0, "GLD": flow.TEST_PCT} and hypo == {"GLD": flow.TEST_PCT}
 
 
 def test_split_by_asset_class_moves_with_the_trade():
@@ -39,7 +42,7 @@ def test_split_by_asset_class_moves_with_the_trade():
     by = {c["name"]: c for c in p["by_class"]}
     assert by["Gold"]["after_pct"] - by["Gold"]["before_pct"] == pytest.approx(0.5)
     assert by["Cash and T-bills"]["after_pct"] - by["Cash and T-bills"]["before_pct"] == pytest.approx(-0.5)
-    assert by["Equities"]["after_pct"] == pytest.approx(by["Equities"]["before_pct"])  # gold does not touch equities
+    assert by["Commodities"]["after_pct"] == pytest.approx(by["Commodities"]["before_pct"])  # gold does not touch commodities
     assert p["risk"]["budget_used_after_pct"] == 16.7
 
 

@@ -39,7 +39,7 @@ def client():
 @pytest.fixture
 def idea(monkeypatch):
     from app.invest import screening
-    monkeypatch.setattr(screening, "holdings", lambda: [{"symbol": "NVDA", "weight_pct": 1.5}])
+    monkeypatch.setattr(screening, "holdings", lambda: [{"symbol": "DBC", "weight_pct": 3.0}])
     return ideas.create("AI capex slows and semis fall", "tactical", "test")
 
 
@@ -66,10 +66,11 @@ def test_screen_before_thesis_is_409(client, idea):
 
 @pytest.mark.parametrize("items,msg", [
     ([{"symbol": "NOT_A_TICKER'; DROP TABLE x;--", "weight_pct": 1}], "Not in the universe"),
-    ([{"symbol": "NVDA", "weight_pct": -1}, {"symbol": "NVDA", "weight_pct": -0.5}], "appear once"),
-    ([{"symbol": "NVDA", "weight_pct": 0}], "cannot be zero"),
-    ([{"symbol": "NVDA", "weight_pct": -2}], "can cut at most 1.50%"),
-    ([{"symbol": "AMD", "weight_pct": -1}], "can cut at most 0.00%"),  # not held: cannot short
+    ([{"symbol": "NVDA", "weight_pct": 1}], "Not investable"),  # equities can be researched, never traded
+    ([{"symbol": "GLD", "weight_pct": -1}, {"symbol": "GLD", "weight_pct": -0.5}], "appear once"),
+    ([{"symbol": "GLD", "weight_pct": 0}], "cannot be zero"),
+    ([{"symbol": "DBC", "weight_pct": -4}], "can cut at most 3.00%"),
+    ([{"symbol": "UNG", "weight_pct": -1}], "can cut at most 0.00%"),  # not held: cannot short
 ])
 def test_basket_validation(client, idea, items, msg):
     r = client.post(f"/api/invest/ideas/{idea['id']}/basket", json={"items": items})

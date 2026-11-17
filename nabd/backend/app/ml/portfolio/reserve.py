@@ -1,20 +1,18 @@
-"""The notional reserve portfolio: benchmark (SAA), tranches, active risk budget.
+"""The notional commodity book: benchmark (strategic allocation), sleeves, active risk budget.
 
-ILLUSTRATIVE ONLY. This is not CBUAE's portfolio. It follows the public outline:
-- four tranches: money market (liquidity), capital market (return and diversification), gold, long-term investment
-  (Central Banking reserve-manager profile);
-- mostly high-quality liquid assets, more international government bonds and measured developed-market equity under
-  the 2025-2029 SAA, with new passive mandates often on SRI-screened indices (CBUAE Annual Report 2025);
-- gold near the published AED 37.9 bn, about 3.5% of USD 285 bn net reserves.
-Each line is an ETF standing in for the index a mandate would track. The active risk budget is an assumption.
+ILLUSTRATIVE ONLY. This is not CBUAE's portfolio. The investment team asked for a commodity focus, so the benchmark
+is a commodity book: gold, energy, industrial and precious metals, agriculture and broad commodity indices, with a
+small liquidity sleeve (Treasury bills and inflation-linked bonds) to fund trades and hold collateral. Each line is an
+ETF standing in for the index or futures programme a mandate would hold. Sizes and the risk budget are assumptions.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 
-NOTIONAL_USD_BN = 285.0
-ACTIVE_RISK_BUDGET_BP = 60.0  # ex-ante tracking-error budget against the SAA, bp a year (assumption)
+NOTIONAL_USD_BN = 25.0
+ACTIVE_RISK_BUDGET_BP = 150.0  # ex-ante tracking-error budget against the benchmark, bp a year (assumption;
+# commodities move 15-35% a year, so a reserve-style 60 bp budget would leave no room for any tilt)
 
 
 @dataclass(frozen=True)
@@ -26,23 +24,22 @@ class Line:
 
 
 SAA: list[Line] = [
-    Line("SHV", "Money market", 25.0, "US Treasury bills, daily liquidity"),
-    Line("SHY", "Capital market", 18.0, "US Treasuries 1-3y"),
-    Line("IEI", "Capital market", 14.0, "US Treasuries 3-7y"),
-    Line("IEF", "Capital market", 10.0, "US Treasuries 7-10y"),
-    Line("TLT", "Capital market", 3.0, "US Treasuries 20y+"),
-    Line("BWX", "Capital market", 6.0, "International government bonds"),
-    Line("TIP", "Capital market", 3.0, "US inflation-linked"),
-    Line("ESGU", "Capital market", 4.0, "US equity, SRI-screened index (passive mandate)"),
-    Line("ESGD", "Capital market", 2.0, "Developed ex-US equity, SRI-screened index (passive mandate)"),
-    Line("GLD", "Gold", 4.0, "Gold"),
-    Line("ESGU", "Long-term investment", 4.0, "US equity, SRI-screened index"),
-    Line("ESGD", "Long-term investment", 3.0, "Developed ex-US equity, SRI-screened index"),
-    Line("LQD", "Long-term investment", 2.0, "Investment-grade corporate bonds"),
-    Line("EMB", "Long-term investment", 2.0, "Emerging-market sovereign bonds in USD"),
+    Line("GLD", "Gold", 30.0, "Physical gold"),
+    Line("BNO", "Energy", 12.0, "Brent crude futures"),
+    Line("USO", "Energy", 6.0, "WTI crude futures"),
+    Line("UNG", "Energy", 4.0, "Natural gas futures"),
+    Line("CPER", "Industrial metals", 8.0, "Copper futures"),
+    Line("DBB", "Industrial metals", 6.0, "Aluminium, zinc and copper futures"),
+    Line("SLV", "Precious metals", 6.0, "Physical silver"),
+    Line("PPLT", "Precious metals", 3.0, "Physical platinum"),
+    Line("DBA", "Agriculture", 6.0, "Grains, softs and livestock futures"),
+    Line("DBC", "Broad commodities", 7.0, "Diversified commodity index"),
+    Line("GSG", "Broad commodities", 3.0, "S&P GSCI (energy-weighted index)"),
+    Line("SHV", "Liquidity", 6.0, "US Treasury bills: margin, collateral and dry powder"),
+    Line("TIP", "Liquidity", 3.0, "US inflation-linked Treasuries"),
 ]
 
-TRANCHES = ["Money market", "Capital market", "Gold", "Long-term investment"]
+TRANCHES = ["Gold", "Energy", "Industrial metals", "Precious metals", "Agriculture", "Broad commodities", "Liquidity"]
 
 
 def benchmark_weights() -> dict[str, float]:
@@ -53,12 +50,16 @@ def benchmark_weights() -> dict[str, float]:
     return w
 
 
-def equity_sleeve() -> dict[str, float]:
-    """Benchmark equity lines, used to fund an equity tilt pro rata so the tilt is a relative bet."""
-    eq = {"ESGU", "ESGD"}
-    w = {s: v for s, v in benchmark_weights().items() if s in eq}
-    tot = sum(w.values())
-    return {s: v / tot for s, v in w.items()}
+def risk_sleeve() -> dict[str, float]:
+    """Benchmark commodity and gold lines, pro rata. A tilt is funded from them so it is a relative bet within the book
+    (the "equity" funding key is kept for stored ideas; it now means this sleeve)."""
+    lines = {line.symbol for line in SAA if line.tranche != "Liquidity"}
+    w = {s: v for s, v in benchmark_weights().items() if s in lines}
+    total = sum(w.values()) or 1.0
+    return {s: v / total for s, v in w.items()}
+
+
+equity_sleeve = risk_sleeve
 
 
 def describe() -> dict:
@@ -70,5 +71,5 @@ def describe() -> dict:
         "active_risk_budget_bp": ACTIVE_RISK_BUDGET_BP,
         "lines": [line.__dict__ for line in SAA],
         "tranches": [{"name": t, "weight": by_tranche.get(t, 0.0)} for t in TRANCHES],
-        "disclaimer": "Notional and illustrative; not CBUAE's holdings. ETFs stand in for mandate indices.",
+        "disclaimer": "Notional commodity book, illustrative; not CBUAE's holdings. ETFs stand in for the indices and futures a mandate would hold.",
     }

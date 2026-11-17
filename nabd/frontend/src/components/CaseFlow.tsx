@@ -25,9 +25,9 @@ const when = (s: string) => new Date(s.replace(' ', 'T')).toLocaleString('en-GB'
 
 type Pos = { x: number; y: number };
 
-export default function CaseFlow({ flow, members, active, onActive, step, onStep }: {
+export default function CaseFlow({ flow, members, active, onActive, step, onStep, lanes = false }: {
   flow: Flow; members: Member[]; active: string | null; onActive: (k: string | null) => void;
-  step: number; onStep: (n: number) => void;
+  step: number; onStep: (n: number) => void; lanes?: boolean;
 }) {
   const wrap = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ w: 640, h: 360 });
@@ -62,6 +62,10 @@ export default function CaseFlow({ flow, members, active, onActive, step, onStep
   const perCol = Math.max(1, ...Object.values(flow.nodes.reduce<Record<number, number>>((acc, n) => ({ ...acc, [n.layer]: (acc[n.layer] ?? 0) + 1 }), {})));
   const dense = (V - padV0 - padV1) / perCol < (vertical ? 110 : 46);  // crowded layers: names on hover only
   const xy = (u: number, v: number): Pos => (vertical ? { x: v, y: u } : { x: u, y: v });
+  // bank rows (wide screens): each bank gets a horizontal lane, so cross-bank hops read as moves between rows
+  const banks = useMemo(() => [...new Set(flow.nodes.map((n) => n.bank))].sort(), [flow]);
+  const byBank = lanes && !vertical && banks.length > 1;
+  const laneH = (V - padV0 - padV1) / Math.max(1, banks.length);
   const posF = useMemo(() => {
     const p = new Map<string, { u: number; v: number }>();
     const colU = (c: number) => (cols <= 1 ? U / 2 : padU + (c / (cols - 1)) * (U - 2 * padU));
@@ -69,13 +73,20 @@ export default function CaseFlow({ flow, members, active, onActive, step, onStep
     flow.nodes.forEach((n) => byLayer.set(n.layer, [...(byLayer.get(n.layer) ?? []), n]));
     byLayer.forEach((ns, l) => {
       ns.sort((x, y) => x.bank.localeCompare(y.bank) || x.id.localeCompare(y.id));
-      ns.forEach((n, i) => p.set(n.id, { u: colU(l + (hasIn ? 1 : 0)), v: padV0 + ((i + 0.5) / ns.length) * (V - padV0 - padV1) }));
+      if (byBank) {
+        banks.forEach((b, bi) => {
+          const inLane = ns.filter((n) => n.bank === b);
+          inLane.forEach((n, j) => p.set(n.id, { u: colU(l + (hasIn ? 1 : 0)), v: padV0 + bi * laneH + ((j + 0.5) / inLane.length) * laneH }));
+        });
+      } else {
+        ns.forEach((n, i) => p.set(n.id, { u: colU(l + (hasIn ? 1 : 0)), v: padV0 + ((i + 0.5) / ns.length) * (V - padV0 - padV1) }));
+      }
     });
     const mid = vertical ? V / 2 - 20 : V / 2;
     if (hasIn) p.set(IN, { u: colU(0), v: mid });
     if (hasOut) p.set(OUT, { u: colU(cols - 1), v: mid });
     return p;
-  }, [flow, U, V, cols, hasIn, hasOut, vertical, padU, padV0, padV1]);
+  }, [flow, U, V, cols, hasIn, hasOut, vertical, padU, padV0, padV1, byBank, banks, laneH]);
   const pos = useMemo(() => new Map([...posF].map(([k, f]) => [k, xy(f.u, f.v)])), [posF, vertical]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // every arrow: inside the case, plus money from and to outside accounts
@@ -128,6 +139,12 @@ export default function CaseFlow({ flow, members, active, onActive, step, onStep
             {['base', 'hot'].map((t) => <marker key={t} id={`cf-arrow-${t}`} viewBox="0 0 10 10" refX="8" refY="5" markerWidth="9" markerHeight="9" markerUnits="userSpaceOnUse" orient="auto">
               <path d="M0,0 L10,5 L0,10 z" fill={t === 'hot' ? '#d70015' : 'rgba(60,60,67,.45)'} /></marker>)}
           </defs>
+          {byBank && banks.map((b, bi) => (
+            <g key={b} className="cf-lane">
+              <rect x={0} y={padV0 + bi * laneH} width={size.w} height={laneH} fill={bi % 2 ? 'var(--fill-2)' : 'transparent'} />
+              <text x={size.w - 8} y={padV0 + bi * laneH + 14} textAnchor="end" className="cf-lane-label">{b}</text>
+            </g>
+          ))}
           {arrows.map((a) => {
             const pa = posF.get(a.s), pb = posF.get(a.d);
             if (!pa || !pb) return null;

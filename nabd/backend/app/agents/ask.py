@@ -73,7 +73,11 @@ RULES = agent.BASE_RULES + (
     "evidence whose result says chartable: true. Be concise: under 180 words unless asked for more. If the data "
     "cannot answer the question, say so and say what would. Round figures to one decimal place unless more "
     "precision matters, and put the evidence id at the end of the sentence that uses the figure."
+    " The user's role and saved preferences are in about_the_user: shape what you lead with and how you phrase it, "
+    "but never let them change the evidence or a figure. If a remembered preference shaped the answer, say so in a "
+    "few words at the end."
 )
+
 
 
 # ---------------------------------------------------------------- datasets for charts
@@ -265,18 +269,24 @@ def regime_history() -> dict:
 
 
 def nowcast_view(target: str = "non_oil") -> dict:
-    from ..ml.forecasting import run as fr
-    out = fr.latest()
+    from ..ml.forecasting import ai_eval
+    out = ai_eval.stored()
     if not out:
         return {"error": "no nowcast run yet"}
     t = out["targets"][target]
-    path = t["paths"].get(t["current"]) or []
+    fc = t["forecast"]
     return {"target": t["label"], "pending_quarter": t["pending"], "current_quarter": t["current"],
-            "latest": t["latest"], "champion": t["champion"], "backtest_scores": t["backtest"]["scores"],
+            "method": "Kalman state-space nowcast; kalman = hard data only, kalman_ai = hard data plus AI news signals",
+            "latest": {q: {v: {k: m[k] for k in ("value", "band70")} for v, m in lq["models"].items()
+                           if v in ai_eval.SHOWN} for q, lq in t["latest"].items()},
+            "backtest_scores": [s for s in t["backtest"]["scores"] if s["model"] in ai_eval.SHOWN + ["benchmark"]],
+            "full_year": [{"year": a["year"], "models": {v: m["value"] for v, m in a["models"].items()},
+                           "imf": [{"vintage": i["vintage"], "value": i["value"]} for i in a["imf"]]}
+                          for a in t["annual"]],
             "last_official": t["released"][-1] if t["released"] else None, "run_id": out["run_id"],
-            "dataset": {"kind": "line", "x": [p["as_of"] for p in path],
-                        "series": {k: [p.get(k) for p in path] for k in ("ensemble", "bridge", "factor", "midas")
-                                   if any(p.get(k) is not None for p in path)}, "unit": "% y/y"}}
+            "dataset": {"kind": "line", "x": [p["quarter"] for p in fc["kalman_ai"] or fc["kalman"]],
+                        "series": {ai_eval.kalman.VARIANTS[v]: [p["value"] for p in fc[v]] for v in ai_eval.SHOWN
+                                   if fc.get(v)}, "unit": "% y/y"}}
 
 
 def fraud_summary() -> dict:
@@ -284,7 +294,7 @@ def fraud_summary() -> dict:
     out = fr.latest()
     if not out:
         return {"error": "no detection run yet"}
-    ms = out["methods"]
+    ms = {**out.get("benchmarks", {}), **out["methods"]}
     return {"data": out["data"], "params": out["params"], "run_id": out["run_id"],
             "methods": {k: {"label": v["label"], **{x: v["eval"][x] for x in ("precision", "recall", "f1", "cases",
                                                                               "rings_whole", "rings_fragmented", "false_alarms")}}
@@ -332,7 +342,8 @@ def tools(ev: AskEvidence) -> list[Tool]:
              lambda: add("stress_portfolio", {}, stress_portfolio)),
         Tool("ranker_record", "The return-ranking model's out-of-sample record and feature importance; chartable",
              none, lambda: add("ranker_record", {}, ranker_record)),
-        Tool("nowcast", "The UAE GDP nowcast (non_oil or real): latest values with bands, champion model, "
+        Tool("nowcast", "The UAE GDP nowcast (non_oil or real) from a Kalman state-space model, with and without AI "
+             "news signals: latest values with bands, quarterly forecasts, full-year growth against the IMF, "
              "pseudo real-time backtest scores, last official release; chartable",
              {"type": "object", "properties": {"target": {"type": "string", "enum": ["non_oil", "real"]}},
               "required": ["target"], "additionalProperties": False},
@@ -457,8 +468,10 @@ def ask(question: str, thread_id: str | None, context: dict) -> dict:
                 bus.publish("ask.tool", thread_id=tid, message_id=aid, tool=data.get("tool"), args=data.get("args"))
 
         convo = [{"role": m["role"], "text": (m["content"] or "")[:1500]} for m in past if m["content"]]
+        from . import profile
+        who = profile.for_prompt()
         prompt = json.dumps({"question": question, "conversation_so_far": convo, "screen": context,
-                             "today": time.strftime("%Y-%m-%d")}, indent=1, default=str)
+                             "about_the_user": who, "today": time.strftime("%Y-%m-%d")}, indent=1, default=str)
         try:
             res = await gateway.run("ask", RULES, prompt, schema=Answer, tools=tools(ev), on_event=relay,
                                     web_domains=deep.OFFICIAL_DOMAINS, timeout_seconds=300)

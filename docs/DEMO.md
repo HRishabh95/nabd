@@ -1,136 +1,133 @@
 # Nabd demo: 15 minutes
 
-For the Investment team, the Head of AI, the Head of Cyber and the CRO. One presenter drives; the script is in
-the order of the dock (Overview, Investment, Forecasting, Fraud network) with Ask Nabd in the middle.
+For the Investment team, the Economics department, AML and Fraud, the Head of AI, the Head of Cyber and the CRO.
+One presenter drives, in dock order: Overview, Investment, Forecasting, Fraud network, Governance, then Ask Nabd.
 
-Figures below are from the demo data on 16 Nov 2026. They change as data refreshes; say what the screen says.
+The story for every page is the same: **CBUAE already does this work; Nabd shows what AI adds, and checks itself.**
+Figures below are from the demo data on 17 Nov 2026. They move as data refreshes; say what the screen says.
 
 ## Before the room fills (10 minutes)
 
 1. `make doctor`: every line green. If Codex is not signed in, run `codex login`.
 2. Freeze the data so nothing moves mid-demo: set `NABD_REFRESH_ENABLED=false` in `nabd/.env`, then `make dev`.
-3. Open <http://localhost:5173> in a browser window about 1440 px wide. Close other tabs.
-4. Ask Nabd one warm-up question (below) so the Codex session is already started.
-5. Have the three ideas ready on the Investment page: *Quality energy producers* (monitored position),
-   *Japanese banks* (at committee) and *Reduce AI-linked equity risk* (at screening).
+3. Open <http://localhost:5173> in a browser window at least 1440 × 900 (text steps up a size at that width).
+4. Warm up the slow parts so nothing waits in front of the room:
+   - Ask Nabd one question (below).
+   - Open Fraud network once: the AI note for C01 is written and cached.
+   - Forecasting: press *Rerun nowcast* (12 seconds).
+5. Investment: the benchmark is a notional commodity book (gold 30%, energy 22%, metals 23%, agriculture 6%, broad
+   indices 10%, liquidity 9%); equities are data only. The pipeline is empty: add one or two commodity ideas the day
+   before and run deep research on one (12 minutes) so a report and proposed split are ready.
 
-**If Codex is unavailable**, everything except new research and Ask Nabd still works: screening, portfolio fit,
-stress, committee packs, monitoring, the nowcast and fraud detection are all Python models. Say so and carry on.
+**If Codex is unavailable**, everything except new ideas, research, fraud notes and Ask Nabd still works: screening
+figures, portfolio fit, stress, the nowcast and fraud detection are Python models. Say so and carry on.
 
 ## The walkthrough
 
-### 0:00 Overview: what markets are doing and the news (1 min)
+### 0:00 Overview (1 min)
+Markets on the left (Gulf indices, global equities, rates, oil, gold, currencies); click one for its chart. News on
+the right, filtered to what a reserve manager reads (oil, Gulf shipping, UAE economy, rates, central banks).
+*Say:* "One screen of what moved and why, before we open anything."
 
-- One line under the title says the day: DFM, S&P 500, Brent, the US 10-year and gold.
-- **Markets**: UAE and Gulf indices, global equities, rates, commodities, currencies and the VIX, each with today's
-  move. Select one for its chart (1 month, 3 months, 1 year), its 1-month and this-year moves.
-- **News**: headlines that are actually about oil, Gulf shipping, the UAE economy, the Fed, gold, AI and markets,
-  one per story, plus the latest Fed, ECB and BoJ releases. Arabic sources are included.
-- *Caveat:* prices are Yahoo's and may be delayed; DFM, ADX and Tadawul history builds up from the first download,
-  because Yahoo publishes only their current level.
+### 1:00 Investment: from an idea to a decision (5 min)
+1. Press **New idea** and type, for example, *"Oil prices fall as Hormuz reopens in 2027; hold less oil and protect
+   the portfolio"* or *"Gold keeps rising as central banks buy and real yields fall; overweight gold for 6 months"*. Nabd writes the thesis (about 40 seconds) and proposes **what to look at**:
+   names to buy or research, what to hold less of, and protection, each with a reason.
+2. Point at the **check badges**: Nabd measures each suggestion against the data (how it moves with the idea, what it
+   did on the idea's worst days). *"Data disagrees"* means the LLM's suggestion failed the test. "The AI proposes;
+   the data decides."
+3. Tick what to trade or press *Research*, then **Review and start research**: before anything runs, the screen
+   shows the portfolio before and after, by asset class, and warns when the selection does not change exposure.
+4. Open an idea that already has research: plan, investigation, red team, verification, and a **proposed split**
+   of the portfolio within the risk budget, which *Use this split* adopts. Then portfolio fit, stress and the
+   committee pack.
 
-### 1:00 Investment: from an idea to a monitored position (5½ min)
+### 6:00 Forecasting: what AI adds to a GDP model (3 min)
+1. **One model, two ways**: the same Kalman nowcast on hard data (shipping, trade, equities), and with an AI news
+   signal added. The track-record chart shows what each said a month after every past quarter, against FCSC's first
+   release, and the forecast to the end of 2027.
+2. **Against the IMF**: real GDP 2026 −0.6% (with AI) against the IMF's −3.9%. The card shows the arithmetic: with
+   Q1 and Q2 published, the IMF's figure needs Q3 and Q4 to average about −8.3%.
+3. **Why it moved**: an exact split of the latest revision by input, with AI news tagged.
+4. **What the AI read**: every headline behind the AI signal, with the label the LLM gave it. The signal is a
+   diffusion index like a PMI balance (% stronger minus % weaker, shrunk in thin months); only headlines reporting
+   actual UAE activity count (23% of those read). "This is the audit
+   trail: nothing in the signal you cannot open and read."
+*Say honestly:* AI news cut the error mainly in the Q2 2026 contraction; in calm quarters it adds nothing. With 13
+published quarters, treat it as promising, not proven.
 
-**The portfolio view.** A notional USD 285 bn reserve with an equity sleeve and a 60 bp active-risk budget. Show the
-ideas tested so far and what each added to risk.
+5. **Test the nowcast** (button at the top): switch inputs off and on and re-test in seconds; adding global market
+   series makes it clearly worse, which shows why they are left out. *Score your own model*: download the template,
+   fill CBUAE's past nowcasts, upload, and see them next to Kalman + AI and the average of the two.
 
-**Start an idea live** (optional, 30 seconds): type "AI capex slows and semiconductors sell off" and choose
-*tactical*. Codex turns it into a thesis with assumptions; screening then shows the names we hold that are most
-exposed (the *Reduce* list) and what would protect the portfolio. Leave it running and move on.
+### 9:00 Fraud network: one investigation, end to end (3 min)
+1. The summary: 90,775 synthetic payments analysed, 266 suspicious, 32 networks, 91% precision against the labels.
+2. **C01 opens on its own**: seven accounts at four banks passing AED 1.16 m around a loop in one afternoon. Numbers
+   on the arrows are the order of transfers; click an account to trace the money onward and back.
+3. **Money flow**: the same network left to right in time, one row per bank, with *Replay the money*.
+4. **AI investigation**: why it was flagged, how the accounts connect, the telling transfers (click one to trace
+   it) and what to examine next. Point at the last line: every transfer it cites is checked against the data, and
+   it never saw the labels.
+5. Open **C08** (fan-in) from its bubble to show a different pattern.
+6. For "can we use real payment data?": press **What the AI saw** (the exact text, and what is never sent) and
+   **Real payment data: how it stays safe**.
 
-**Open Reduce AI-linked equity risk (at screening)** to show how Nabd turns an idea into things to look at.
-- *What to look at*: Nabd reads the idea as a bet on "AI-linked equities" and shows that about 5% of the portfolio
-  moves like them today.
-- *Hold less of*: the US equity mandate, which the data confirms falls when AI stocks fall.
-- *Add as protection*: Treasuries (the data agrees) and gold, which the data flags: it fell on AI stocks' worst
-  days too. Point at that badge: the assistant suggests, the models check.
-- *Study first*: NVIDIA, Broadcom, Microsoft and the others, sent to deep research without trading them.
-- "Propose again" asks the assistant for a fresh proposal (about 30 seconds).
+### What a sceptical economist will ask, and where to click
+- *"Does the news really help?"* the track-record chart and *Test the nowcast → Switch inputs*: switch the AI news
+  off and re-test; the error rises at quarter end and a month after for non-oil GDP.
+- *"Why Kalman?"* the **Why Kalman?** button: mixed frequencies, missing data, built-in uncertainty, exact revision
+  breakdown, standard at central banks.
+- *"Why so far from the IMF's 7.7% for 2027?"* the IMF card: under the IMF's own reopening assumption the model gives
+  about 9%; the gap is the assumption, not the model.
+- *"How is a headline scored?"* **What the AI read → How the AI scores**, and the one-line reason under each headline.
 
-**Open Japanese banks (at committee).** This is the showpiece.
-- *Research* ran in the background: a plan, three parallel researchers, a red team and a verifier.
-  - 45 claims: 27 supported, 18 partly supported, 0 unsupported.
-  - 154 of 156 figures traced to evidence.
-  - 167 evidence items: Nabd's own event studies and filings plus 17 searches restricted to official sites (BoJ, FSA,
-    JPX, SEC).
-- Point at one red-team finding: after 18 oil shocks the basket lagged SPY by 2.5% over 20 days (t −2.7). That is
-  the argument against, computed, not asserted.
-- Point at the memory catch: the red team noticed that the Equinor cap approved earlier (0.1%) differs from the
-  weight now held. Nabd remembers decisions across ideas.
-- *Portfolio fit*: budget use goes from 77% to 83%; the idea adds about 21 bp of tracking error.
-- *Stress*: historical replays, factor shocks and a 2,000-path simulation.
-- *Committee pack*: evidence, risk sign-off, and an exit plan with stop, target, review date and the triggers the
-  research itself proposed.
+### Governance (1 min, before Ask Nabd)
+*Models*: one card per model saying what it does, the data, how it was tested, what the test found and what it
+cannot show (for example the risk model: 3 exceptions in 250 days, Basel green, with filtered historical simulation),
+and its **Validation pack** (purpose, data, method, results,
+limits, run history, sign-off; print to PDF). Say: "Ready for your validators; not yet validated."
+*AI evaluation*: research claims verified, fraud-note transfers matched, Ask Nabd figures traced, and human review
+from the 👍 / 👎 under every AI output. **Label 10 headlines** measures the AI's news labels against your analysts.
 
-**Open Quality energy producers (monitored).** After approval, the position is watched: health score, the exit
-triggers, and an alert on the Ideas tab when one trips.
+### 12:00 Ask Nabd (1½ min)
+Open the full page (**Ask Nabd → Open full page**): conversations on the left, the chat in the middle, and *About
+you* on the right: pick a role (Investment, Economics, AML, Risk, Executive) and save preferences; answers say when a
+saved preference shaped them.
+Press `/` and ask, for example: *"What is Nabd's nowcast for UAE real GDP in 2026, and how does it compare with the
+IMF?"* The answer cites its sources and shows *5 of 5 figures traced*: every number came from a tool.
 
-### 6:30 Ask Nabd: answers with figures the LLM cannot invent (2 min)
-
-Press `/` or the Ask button in the dock. Tested questions:
-
-1. "How would a Hormuz closure hit the whole portfolio?" Expect a bar chart and "6 of 6 figures traced".
-2. "Brent against XLE and SPY over one year." Expect a line chart, then follow up with "and over three years?"
-   to show it keeps the thread.
-
-Point at the steps streaming (which tools it called) and the figure-check badge. *For the Head of AI:* Codex only
-chooses tools and writes the words. Every number comes from a tool, charts are drawn from the tool's own data, and
-any figure that cannot be traced to evidence in the same paragraph is flagged.
-
-### 8:30 Forecasting: UAE GDP before FCSC publishes it (2½ min)
-
-- The headline: the Q3 2026 non-oil nowcast (about −1.4%) against the last official figure (Q2 2026, −1.1%,
-  published 9 October).
-- **The shock test.** From April to July every model called a Q2 contraction while the last-release benchmark said
-  +6.1%. FCSC published −1.1% in October.
-- **Scored honestly.** A pseudo real-time backtest on first releases at three points in each quarter. The champion
-  (bridge regression) has an error about a third below the benchmark for non-oil GDP and 45% below for real GDP.
-- Run the Hormuz and Brent scenario to show the nowcast's sensitivity.
-- *Caveat to say out loud:* about 16 quarters of target data, so the bands are wide. FCSC blocks automated access, so
-  the release record is a sourced CSV an analyst maintains.
-
-### 11:00 Fraud network: follow the money, not the rules (2½ min)
-
-- The headline sentence: rules raise **350** separate alerts and catch **0** of 26 rings whole. Following the money
-  finds the same laundering as **32** cases, and **91%** of the accounts it flags are laundering.
-- The page opens on the strongest case as a **money flow**: money from outside on the left, the account where it
-  enters, the accounts that pass it on, where it leaves. Arrow width is the amount.
-- Press **Replay the money**: transfers light up in time order across banks, with the clock and the running total.
-  Hover any account or arrow (or a row in the timeline) to see the same money highlighted everywhere.
-- Open the mule ring (the largest case, about 60 accounts across six banks) to show scale, then switch methods
-  (Rules → Money trail → Combined). *Whole network* shows where a case sits among every account.
-- Turn on *Show labels* in the whole-network view to prove it against the truth.
-- *Caveat:* the payments are synthetic (AMLSim-style, six banks, 14 days). The method is the point; calibration needs
-  CBUAE payment data on premise.
-
-### 13:30 Close: what each of you should take away (1½ min)
+### 13:30 Close (1½ min)
 
 | Audience | What Nabd showed | What it needs next |
 |---|---|---|
-| Investment team | An idea becomes a committee pack with evidence, sizing, stress and exits in minutes, then stays monitored | Their real portfolio and limits; a licensed price feed |
-| Head of AI | Agents that plan, use tools and verify; the LLM never produces a figure; every model run is recorded | Independent validation; Azure OpenAI UAE North or an on-premise model behind the same gateway |
-| Head of Cyber | Local only, read-only sandboxed LLM with no shell or files, official-domain allowlist, validated inputs | Sign-in and roles, deployment inside CBUAE's network, a penetration test |
-| CRO | Every decision and stage logged with who and when, exit triggers that alert, honest backtests against benchmarks | Model Management Standards validation, thresholds set by Risk |
+| Investment team | An idea becomes researched, sized and stress-tested in minutes, with the data checking the AI | Their real portfolio and limits; a licensed price feed |
+| Economics | AI news measured inside a standard Kalman nowcast, with a track record and the IMF alongside | CBUAE's own indicators (credit, PMI, payments) in the same model; more history |
+| AML and Fraud | A ring found by following the money, explained in plain words, every cited transfer checked | Real payment data under the bank's controls; tuning with investigators |
+| Head of AI | The LLM proposes and writes; Python models measure; figures are traced and checked | Independent validation; Azure OpenAI UAE North or an on-premise model behind the same gateway |
+| Head of Cyber | Local only; read-only LLM sandbox; official-domain allowlist; validated inputs | Sign-in and roles, deployment inside CBUAE's network, a penetration test |
+| CRO | Every stage logged with who and when; honest backtests against benchmarks | Model Management Standards validation; thresholds set by Risk |
 
 ## Questions you will get, and honest answers
 
 - **"Does our data go to OpenAI?"** In this demo, prompts go to OpenAI through Codex, which is why it runs on open
-  data only. In the client environment the same gateway points to Azure OpenAI UAE North or an on-premise model.
-- **"Can the LLM make up a number?"** It can write one, but the figure check traces every figure in an answer to
-  tool evidence in the same paragraph. Research verification removed 0 of 45 claims on the Japanese banks run.
-- **"How good is the nowcast really?"** Better than the last-release benchmark by about a third on non-oil GDP, on
-  9 scored quarters. That is too few to call it validated; it is enough to show the method works.
-- **"Is the fraud precision real?"** It is measured against labelled synthetic data. On real payments, expect lower,
-  and expect to tune the hold window and pass-through share with the AML team.
-- **"Who approved this position?"** The audit log shows every stage, who acted and when. In the POC every user is
-  "Investment team"; sign-in adds named roles.
+  and synthetic data only. In the client environment the same gateway points to Azure OpenAI UAE North or an
+  on-premise model.
+- **"Can the LLM make up a number?"** It can write one, but Ask Nabd traces every figure to tool evidence, research
+  verifies its claims, and the fraud note keeps only transfers that exist in the data.
+- **"Is the nowcast better than ours?"** Not claimed. It shows what adding AI news to a standard model does, measured
+  honestly: it helped in the one contraction and not in calm quarters.
+- **"Did the AI know the future when it read old news?"** Headlines were labelled shuffled and undated, so it judged
+  each one on its text. It could still recognise a famous event from the words; that is stated on the model card.
+- **"Is the fraud precision real?"** It is measured against labelled synthetic data. On real payments expect lower,
+  and expect to tune with the AML team.
 
 ## If something goes wrong
 
 | Symptom | What to do |
 |---|---|
 | A page shows an error card | Press *Reload*. Nabd keeps running and no data is changed |
-| The badge says *Reconnecting · polling* | The stream reconnects on its own and replays missed events; meanwhile pages poll |
+| The badge says *Reconnecting · polling* | The stream reconnects on its own; pages poll meanwhile |
 | The badge says *Backend offline* | The API stopped: rerun `make dev` |
+| An AI note or answer takes long | First time for that network or question: about 40 seconds; it is cached after |
 | Ask Nabd or research errors | Codex session or sign-in. Say so, show an existing research run, and carry on |
-| Nothing loads | Check the API is running: <http://127.0.0.1:8000/api/system/health> |
+| Nothing loads | Check the API: <http://127.0.0.1:8000/api/system/health> |

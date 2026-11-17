@@ -38,6 +38,16 @@ INDICATORS = {
     "dollar": ("fred", "DTWEXBGS", "value", "mean", "logyoy", 8, "Broad dollar"),
     "news_uae_tone": ("gdelt", "news:uae_economy", "tone", "mean", "diffyoy", 1, "News tone: UAE economy"),
     "news_hormuz_vol": ("gdelt", "news:hormuz", "volume", "mean", "level", 1, "News volume: Hormuz"),
+    # global economy (FRED; optional inputs in the nowcast's input panel)
+    "us_indpro": ("fred", "INDPRO", "value", "last", "logyoy", 17, "US industrial production"),
+    "wti": ("fred", "DCOILWTICO", "value", "mean", "logyoy", 7, "WTI crude"),
+    "copper": ("fred", "PCOPPUSDM", "value", "last", "logyoy", 35, "Global copper price (IMF)"),
+    "eu_gas": ("fred", "PNGASEUUSDM", "value", "last", "logyoy", 35, "European natural gas price (IMF)"),
+    "policy_unc": ("fred", "GEPUCURRENT", "value", "last", "logyoy", 45, "Global policy uncertainty"),
+    # LLM labels of UAE business headlines (ai_news.py), as a diffusion index like a PMI balance: % of relevant
+    # headlines saying stronger minus % saying weaker, shrunk toward zero in thin months
+    "ai_nonoil": ("ai_news", "ai:nonoil", "net", "diffusion", "level", 1, "AI news: non-oil activity"),
+    "ai_oil": ("ai_news", "ai:oil", "net", "diffusion", "level", 1, "AI news: oil and gas"),
 }
 CORE = ["hormuz", "ports", "brent", "uae_equity", "vix", "news_uae_tone"]  # used by the compact models
 
@@ -75,6 +85,18 @@ def later_vintage() -> pd.DataFrame:
     return df
 
 
+def imf_forecasts() -> list[dict]:
+    """IMF World Economic Outlook projections of UAE real GDP growth, by vintage, from data/manual/imf_weo_uae.csv.
+    The IMF site blocks automated access, so the record is compiled from the published figures with a source for
+    each; an analyst adds each new WEO vintage as a row."""
+    p = _manual("imf_weo_uae.csv")
+    if not p.exists():
+        return []
+    df = pd.read_csv(p, dtype={"published": str})
+    return [{"vintage": r.vintage, "published": r.published, "year": int(r.year), "value": float(r.real_gdp_yoy),
+             "source": r.source_url, "note": r.note if isinstance(r.note, str) else ""} for r in df.itertuples()]
+
+
 def target(name: str, as_of: pd.Timestamp | None = None, training: bool = False) -> pd.Series:
     """Quarterly target as first released, keeping only quarters published by `as_of`. With training=True, later-
     vintage values for quarters that never had a first release are added (training only; never scored)."""
@@ -108,9 +130,26 @@ def _daily_cached(name: str) -> pd.Series:
     return _cache[key]
 
 
+SHRINK = 5  # pseudo-headlines at zero added to each month: a month with 3 headlines cannot read +100
+
+
+def diffusion(df: pd.DataFrame) -> pd.Series:
+    """Monthly balance from daily counts: 100 * (stronger - weaker) / (relevant + SHRINK)."""
+    g = df.groupby(df.index.to_period("M"))
+    return 100 * (g["up"].sum() - g["down"].sum()) / (g["n"].sum() + SHRINK)
+
+
 def monthly(name: str, as_of: pd.Timestamp | None = None) -> pd.Series:
     """Monthly level of an indicator, using only days published by `as_of` (the last month may be partial)."""
-    _, _, _, agg, _, lag, _ = INDICATORS[name]
+    src, sid, _, agg, _, lag, _ = INDICATORS[name]
+    if agg == "diffusion":
+        key = ("frame", name, max((r["last_refresh"] or 0) for r in store.catalog()) if store.catalog() else 0)
+        if key not in _cache:
+            _cache[key] = store.read_series(src, sid).set_index("date")
+        df = _cache[key]
+        if as_of is not None:
+            df = df[df.index <= as_of - pd.Timedelta(days=lag)]
+        return diffusion(df) if len(df) and "up" in df else pd.Series(dtype=float)
     s = _daily_cached(name)
     if as_of is not None:
         s = s[s.index <= as_of - pd.Timedelta(days=lag)]

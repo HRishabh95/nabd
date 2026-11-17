@@ -75,11 +75,24 @@ def screen(idea_id: str) -> dict:
     return screening.view(idea["thesis"] or {}, idea["proposal"])
 
 
+TEST_PCT = 1.0  # default test size for a research-only name: fit and stress test it as if added at this weight
+
+
+def tested_lines(basket: dict | None) -> tuple[dict[str, float], dict[str, float]]:
+    """What fit and stress test: the traded lines, plus each research-only name at its test size (a hypothetical
+    addition, never a trade). Returns (all lines tested, the hypothetical part)."""
+    trade = trade_lines(basket)
+    hypo = {b["symbol"]: float(b.get("test_pct") or TEST_PCT) for b in (basket or {}).get("items", [])
+            if b.get("research_only") and b["symbol"] not in trade}
+    return {**trade, **hypo}, hypo
+
+
 def set_basket(idea_id: str, items: list[dict], funding: str, actor: str) -> dict:
     """Lines to trade (a weight; negative cuts a holding or underweights a name the mandates hold) and lines to
     research only (no weight: deep research studies them, the risk model ignores them)."""
     lines = [{"symbol": i["symbol"], "weight_pct": 0.0 if i.get("research_only") else float(i["weight_pct"]),
               "research_only": bool(i.get("research_only")),
+              **({"test_pct": float(i.get("test_pct") or TEST_PCT)} if i.get("research_only") else {}),
               "name": BY_SYMBOL[i["symbol"]].name if i["symbol"] in BY_SYMBOL else i["symbol"]} for i in items]
     basket = {"items": lines, "total_pct": round(sum(b["weight_pct"] for b in lines), 3)}
     return ideas.update(idea_id, actor, "basket selected", stage="research", basket=basket, funding=funding)
@@ -90,8 +103,8 @@ def preview(idea: dict, items: list[dict], funding: str) -> dict:
     driver and the risk budget used. Computed, not saved; shown before research starts so the team can check the
     selection does what the idea says."""
     from ..data.universe import BY_SYMBOL as U
-    tilt = trade_lines({"items": [{**i, "weight_pct": 0.0 if i.get("research_only") else float(i.get("weight_pct") or 0)}
-                                   for i in items]})
+    tilt, hypo = tested_lines({"items": [{**i, "weight_pct": 0.0 if i.get("research_only") else float(i.get("weight_pct") or 0)}
+                                         for i in items]})
     existing = ideas.active_positions()
     base = dict(reserve.benchmark_weights())
     for s_, w in existing.items():
@@ -107,13 +120,13 @@ def preview(idea: dict, items: list[dict], funding: str) -> dict:
             return "Other"
         if "cash" in inst.tags:
             return "Cash and T-bills"
-        return {"equity": "Equities", "bond": "Bonds", "gold": "Gold"}.get(inst.asset, "Other")
+        return {"equity": "Equities", "bond": "Bonds", "gold": "Gold", "commodity": "Commodities"}.get(inst.asset, "Other")
     groups: dict[str, list[float]] = {}
     for s_ in set(base) | set(after):
         g = groups.setdefault(group(s_), [0.0, 0.0])
         g[0] += base.get(s_, 0.0) * 100
         g[1] += after.get(s_, 0.0) * 100
-    order = ["Equities", "Bonds", "Cash and T-bills", "Gold", "Other"]
+    order = ["Commodities", "Gold", "Bonds", "Cash and T-bills", "Equities", "Other"]
     by_class = [{"name": k, "before_pct": round(groups[k][0], 2), "after_pct": round(groups[k][1], 2)} for k in order if k in groups]
     lines = [{"symbol": s_, "name": U[s_].name if s_ in U else s_, "before_pct": round(base.get(s_, 0.0) * 100, 3),
               "after_pct": round(after.get(s_, 0.0) * 100, 3)} for s_ in sorted(active, key=lambda x: -abs(active[x]))
@@ -127,14 +140,12 @@ def preview(idea: dict, items: list[dict], funding: str) -> dict:
         d = R[[x for x in prop["driver_symbols"] if x in R]].mean(axis=1)
         betas = {x: float(R[x].cov(d) / d.var()) for x in syms if x in R and d.var() > 0}
         # equity lines only, the same measure as the screen's 'moves like' figure, so the two numbers agree
-        exp = lambda w: round(sum(v * 100 * betas.get(k, 0.0) for k, v in w.items() if k in U and U[k].asset == "equity"), 2)  # noqa: E731
+        exp = lambda w: round(sum(v * 100 * betas.get(k, 0.0) for k, v in w.items() if k in U and k != "SHV"), 2)  # noqa: E731
         driver = {"label": prop.get("driver_label"), "before_pct": exp(base), "after_pct": exp(after)}
     r = risk.analyse(active, existing, subject=idea["id"]) if active else None
     warnings = []
     bearish = (idea.get("thesis") or {}).get("direction") == "underweight"
-    if not tilt:
-        warnings.append("Nothing is traded: every name is research only, so portfolio fit and stress will have nothing to test.")
-    elif driver and bearish and driver["after_pct"] >= driver["before_pct"] - 0.05:
+    if driver and bearish and driver["after_pct"] >= driver["before_pct"] - 0.05:
         warnings.append(f"This selection does not reduce your exposure to {driver['label']}. To act on the idea, cut a "
                         "holding that moves with it, or size the protection to offset it.")
     elif driver and not bearish and driver["after_pct"] <= driver["before_pct"] + 0.05:
@@ -142,6 +153,7 @@ def preview(idea: dict, items: list[dict], funding: str) -> dict:
     return {
         "trades": [{"symbol": k, "name": U[k].name if k in U else k, "weight_pct": v} for k, v in tilt.items()],
         "research_only": [{"symbol": i["symbol"], "name": U[i["symbol"]].name} for i in items if i.get("research_only")],
+        "hypothetical": {k: round(v, 3) for k, v in hypo.items()},
         "funding": funding, "by_class": by_class, "lines": lines, "driver": driver,
         "risk": {"te_bp_after": r["te_bp"]["after"], "budget_used_before_pct": r["budget_used_pct"]["before"],
                  "budget_used_after_pct": r["budget_used_pct"]["after"], "budget_bp": r["budget_bp"]} if r else None,
@@ -182,8 +194,8 @@ def start_quick_research(idea_id: str) -> str:
 
 # ---------- 3. portfolio fit ----------
 def _tilt(idea: dict) -> dict[str, float]:
-    """The traded lines only: research-only names carry no weight."""
-    return trade_lines(idea["basket"])
+    """What fit and stress test: traded lines plus research-only names at their test size."""
+    return tested_lines(idea["basket"])[0]
 
 
 def trade_lines(basket: dict | None) -> dict[str, float]:
@@ -214,7 +226,8 @@ def compute_fit(idea_id: str, actor: str = "Nabd") -> dict:
     fit = {**r, "tilt": tilt, "active": {k: round(v * 100, 3) for k, v in active.items()},
            "max_multiple": round(mult, 2), "max_total_pct": round(sum(tilt.values()) * mult, 2),
            "liquidity": liquidity, "non_sri_lines": sri, "funding": idea.get("funding") or "equity",
-           "regime": regime.regime()["current"]}
+           "regime": regime.regime()["current"],
+           "hypothetical": tested_lines(idea["basket"])[1]}
     ideas.update(idea_id, actor, "fit computed", stage="stress" if idea["stage"] in ("fit", "research") else None,
                  fit=fit)
     return fit
@@ -245,6 +258,7 @@ def start_stress(idea_id: str) -> str:
         active = risk.active_from_tilt(_tilt(idea), idea.get("funding") or "equity")
         existing = ideas.active_positions() if idea["stage"] != "position" else {}
         out = await asyncio.to_thread(stress.run, active, idea_id, 7, existing)
+        out["hypothetical"] = tested_lines(idea["basket"])[1]
         ideas.update(idea_id, "Nabd", "stress run", stage="committee", stress=out)
         progress(1, 1, "Stress ready")
         return {"idea_id": idea_id, "worst": out["worst"]}
@@ -329,8 +343,6 @@ def risk_signoff(idea_id: str, opinion: str, comment: str, actor: str) -> dict:
 def decide(idea_id: str, decision: str, conditions: str, rationale: str, actor: str) -> dict:
     idea = ideas.get(idea_id)
     c = idea["committee"]
-    if not c.get("risk_signoff"):
-        raise ValueError("Risk sign-off is required before the committee decides")
     c["decision"] = {"decision": decision, "conditions": conditions, "rationale": rationale, "by": actor,
                      "ts": time.time()}
     ideas.remember(idea_id, "decision", f"{c['pack']['idea']['title']}: {decision}. {rationale} {conditions}")

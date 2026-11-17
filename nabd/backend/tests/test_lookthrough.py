@@ -56,42 +56,21 @@ def test_indirect_weight_and_missing_files(tmp_data):
     assert via["NVDA"] == pytest.approx(0.525)  # 7% of the portfolio in the mandate × 7.5% of the mandate
 
 
-def test_basket_underweight_capped_by_lookthrough(tmp_data, monkeypatch):
-    from app.invest import screening
+def test_equities_can_be_researched_but_not_traded(tmp_data):
     from app.main import app
-    monkeypatch.setattr(screening, "holdings", lambda: [{"symbol": "ESGU", "weight_pct": 7.0}])
-    (tmp_data / "manual").mkdir()
-    (tmp_data / "manual" / "ESGU_holdings.csv").write_text(SAMPLE)
     idea = ideas.create("AI capex slows and semis fall", "tactical", "test")
     c = TestClient(app, raise_server_exceptions=False)
-    url = f"/api/invest/ideas/{idea['id']}/basket"
-    too_far = c.post(url, json={"items": [{"symbol": "NVDA", "weight_pct": -0.6}]})
-    assert too_far.status_code == 422 and "0.53%" in too_far.json()["detail"] and "through the mandates" in too_far.json()["detail"]
-    zero = c.post(url, json={"items": [{"symbol": "NVDA", "weight_pct": 0}]})
-    assert zero.status_code == 422 and "research only" in zero.json()["detail"]
-    from app.invest import flow
-    monkeypatch.setattr(flow, "start_research", lambda *a, **k: "job-test")
-    ok = c.post(url, json={"items": [{"symbol": "NVDA", "weight_pct": -0.4}, {"symbol": "AVGO", "research_only": True}],
-                           "funding": "mandate"})
-    assert ok.status_code == 200, ok.text
-    basket = ok.json()["idea"]["basket"]
-    assert flow.trade_lines(basket) == {"NVDA": -0.4}  # the research-only name never reaches the risk model
-    assert [b["research_only"] for b in basket["items"]] == [False, True]
+    url = f"/api/invest/ideas/{idea['id']}/preview"
+    r = c.post(url, json={"items": [{"symbol": "NVDA", "weight_pct": -0.5}]})
+    assert r.status_code == 422 and "Not investable" in r.json()["detail"]
+    ok = c.post(url, json={"items": [{"symbol": "NVDA", "research_only": True}, {"symbol": "GLD", "weight_pct": 0.5}]})
+    assert "Not investable" not in ok.text  # research-only equities pass the universe check
 
 
-def test_research_only_basket_cannot_go_to_fit(monkeypatch):
-    from app.invest import flow
-    from app.main import app
-    idea = ideas.create("Study AI names first", "tactical", "test")
-    flow.set_basket(idea["id"], [{"symbol": "NVDA", "weight_pct": 0, "research_only": True}], "cash", "test")
-    r = TestClient(app, raise_server_exceptions=False).post(f"/api/invest/ideas/{idea['id']}/fit")
-    assert r.status_code == 409 and "research only" in r.json()["detail"]
-
-
-def test_cut_proceeds_can_stay_in_the_mandates():
-    to_bills = risk.active_from_tilt({"NVDA": -0.5}, "cash")
-    assert to_bills == {"NVDA": -0.005, "SHV": pytest.approx(0.005)}
-    in_equity = risk.active_from_tilt({"NVDA": -0.5}, "mandate")
-    sleeve = reserve.equity_sleeve()
-    assert "SHV" not in in_equity and sum(in_equity.values()) == pytest.approx(0)
-    assert in_equity["ESGU"] == pytest.approx(0.005 * sleeve["ESGU"])
+def test_cut_proceeds_can_stay_in_the_risk_sleeve():
+    to_bills = risk.active_from_tilt({"DBC": -0.5}, "cash")
+    assert to_bills == {"DBC": -0.005, "SHV": pytest.approx(0.005)}
+    in_sleeve = risk.active_from_tilt({"DBC": -0.5}, "mandate")
+    sleeve = reserve.risk_sleeve()
+    assert "SHV" not in in_sleeve and sum(in_sleeve.values()) == pytest.approx(0)
+    assert in_sleeve["GLD"] == pytest.approx(0.005 * sleeve["GLD"])

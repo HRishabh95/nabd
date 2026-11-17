@@ -1,4 +1,11 @@
-"""Fraud run: detect with every method, summarise cases, evaluate against labels, lay out the network for viewing."""
+"""Fraud run: detect, summarise the networks found, evaluate against the synthetic labels, and prepare the views.
+
+Two approaches are kept for the page (detect.py runs the rest as building blocks and benchmarks):
+- ml        gradient-boosted trees giving every account a risk score (scikit-learn's histogram gradient boosting,
+            the same family as XGBoost), cross-fitted by ring
+- combined  graph detection: money-trail and cycle networks, keeping accounts the ML score agrees with
+Each network's pattern (cycle, fan-in, fan-out, layering chain...) is read from its own transfers, never from labels.
+"""
 
 from __future__ import annotations
 
@@ -45,26 +52,59 @@ def _case_summary(i: int, members: set, tx: pd.DataFrame, fast: pd.DataFrame, ac
     }
 
 
-def layout(accounts: pd.DataFrame, tx: pd.DataFrame, focus: set, cap: int = 900) -> dict:
-    """Positions for the flagged accounts, the true launderers and a sample of their neighbours."""
-    a = accounts.set_index("account")
-    nodes = set(focus) | set(a.index[a.label == 1])
-    nb = tx[tx.src.isin(nodes) ^ tx.dst.isin(nodes)]
-    extra = pd.concat([nb.src, nb.dst]).value_counts()
-    extra = [x for x in extra.index if x not in nodes][: max(0, cap - len(nodes))]
-    nodes |= set(extra)
-    sub = tx[tx.src.isin(nodes) & tx.dst.isin(nodes)]
-    agg = sub.groupby(["src", "dst"]).agg(amount=("amount", "sum"), n=("amount", "size")).reset_index()
-    G = nx.Graph()
-    G.add_nodes_from(nodes)
-    for s, d, amt, n in agg.itertuples(index=False, name=None):
-        G.add_edge(s, d, weight=float(np.log1p(amt)) / 5)
-    pos = nx.spring_layout(G, k=1.6 / np.sqrt(max(len(G), 1)), iterations=80, seed=7, weight="weight")
-    return {"nodes": [{"id": n, "x": round(float(pos[n][0]), 4), "y": round(float(pos[n][1]), 4),
-                       "bank": a.loc[n, "bank"], "kind": a.loc[n, "kind"], "truth": int(a.loc[n, "label"])}
-                      for n in G.nodes],
-            "edges": [{"s": s, "d": d, "amount": round(float(amt), 0), "n": int(n)} for s, d, amt, n in
-                      agg.sort_values("amount", ascending=False).head(4000).itertuples(index=False, name=None)]}
+SHOWN = ("combined", "ml")
+PATTERN = {"cycle": "Circular flow", "fan_in": "Fan-in: many accounts collect into one", "fan_out":
+           "Fan-out: one account spreads money to many", "gather_scatter": "Gather then scatter through a hub",
+           "scatter_gather": "Scatter then gather", "chain": "Layering chain", "mixed": "Mixed pass-through network"}
+
+
+def pattern(edges: list[tuple[str, str]]) -> dict:
+    """The money pattern of a network, from the direction of its transfers only."""
+    G = nx.DiGraph(edges)
+    if not len(G):
+        return {"key": "mixed", "label": PATTERN["mixed"], "hub": None}
+    try:
+        cyc = nx.find_cycle(G)
+        if len(cyc) >= 3:
+            return {"key": "cycle", "label": PATTERN["cycle"], "hub": None, "length": len(cyc)}
+    except nx.NetworkXNoCycle:
+        pass
+    ind, outd = dict(G.in_degree()), dict(G.out_degree())
+    hub_in, hub_out = max(ind, key=ind.get), max(outd, key=outd.get)
+    sources = [n for n in G if ind[n] == 0]
+    sinks = [n for n in G if outd[n] == 0]
+    if ind[hub_in] >= 3 and outd[hub_in] >= 3:
+        return {"key": "gather_scatter", "label": PATTERN["gather_scatter"], "hub": hub_in}
+    if len(sources) == 1 and len(sinks) == 1 and outd[sources[0]] >= 2 and ind[sinks[0]] >= 2:
+        return {"key": "scatter_gather", "label": PATTERN["scatter_gather"], "hub": sources[0]}
+    if ind[hub_in] >= 3:
+        return {"key": "fan_in", "label": PATTERN["fan_in"], "hub": hub_in}
+    if outd[hub_out] >= 3:
+        return {"key": "fan_out", "label": PATTERN["fan_out"], "hub": hub_out}
+    if max(ind.values()) <= 1 and max(outd.values()) <= 1:
+        return {"key": "chain", "label": PATTERN["chain"], "hub": None, "length": nx.dag_longest_path_length(G) + 1}
+    return {"key": "mixed", "label": PATTERN["mixed"], "hub": None}
+
+
+def _links(cases: list[dict], tx: pd.DataFrame) -> list[dict]:
+    """Ties between networks: direct transfers between their members (with the outside accounts both deal with)."""
+    mem = {c["id"]: set(c["members"]) for c in cases}
+    owner = {a: cid for cid, m in mem.items() for a in m}
+    t = tx[tx.src.isin(owner) | tx.dst.isin(owner)]
+    direct: dict = {}
+    for s, d, amt in t[["src", "dst", "amount"]].itertuples(index=False, name=None):
+        a, b = owner.get(s), owner.get(d)
+        if a and b and a != b:
+            k = tuple(sorted((a, b)))
+            direct[k] = direct.get(k, 0.0) + float(amt)
+    cps = {cid: set(t[t.src.isin(m)].dst) | set(t[t.dst.isin(m)].src) for cid, m in mem.items()}
+    out, ids = [], list(mem)
+    for i, a in enumerate(ids):
+        for b in ids[i + 1:]:
+            shared = (cps[a] & cps[b]) - mem[a] - mem[b]
+            if (a, b) in direct:  # shared outside counterparties tie almost every pair (busy merchants), so not used
+                out.append({"a": a, "b": b, "direct_aed": round(direct.get((a, b), 0.0)), "shared": len(shared)})
+    return out
 
 
 def run(params: dict | None = None, progress=None) -> dict:
@@ -72,17 +112,26 @@ def run(params: dict | None = None, progress=None) -> dict:
     accounts, tx = generator.load()
     res = detect.run_all(tx, accounts, params, progress)
     methods = {}
-    focus: set = set()
     for m, cases in res["cases"].items():
         cases = sorted(cases, key=lambda c: -float(res["scores"].reindex(list(c)).max()))
         summ = [_case_summary(i, c, tx, res["fast"], accounts, res["scores"]) for i, c in enumerate(cases[:60])]
+        for c in summ:
+            ins = tx[tx.src.isin(c["members"]) & tx.dst.isin(c["members"])]
+            c["pattern"] = pattern(list(ins[["src", "dst"]].drop_duplicates().itertuples(index=False, name=None)))
         methods[m] = {"label": detect.METHODS[m], "eval": res["eval"][m], "cases": summ, "total_cases": len(cases)}
-        if m != "rules":
-            focus |= set().union(*cases) if cases else set()
-    focus |= set().union(*res["cases"]["rules"][:200]) if res["cases"]["rules"] else set()
-    lay = layout(accounts, tx, focus)
     a = accounts.set_index("account")
-    out = {"created": time.time(), "params": res["params"], "methods": methods, "layout": lay,
+    sc = res["scores"]
+    combined = methods["combined"]["cases"]
+    in_net = set().union(*[set(c["members"]) for c in combined]) if combined else set()
+    out = {"created": time.time(), "params": res["params"], "methods": {m: methods[m] for m in SHOWN},
+           "benchmarks": {m: {"label": v["label"], "eval": v["eval"]} for m, v in methods.items() if m not in SHOWN},
+           "links": _links(combined, tx),
+           "scores": {k: round(float(v), 3) for k, v in sc[sc >= 0.2].items()},
+           "summary": {"transfers": len(tx), "accounts": len(accounts),
+                       "suspicious_transfers": int(sum(c["transfers"] for c in combined)),
+                       "suspicious_aed": round(float(sum(c["flow_aed"] for c in combined))),
+                       "high_risk_accounts": int((sc >= 0.5).sum()), "networks": len(combined),
+                       "accounts_in_networks": len(in_net)},
            "data": {"accounts": len(accounts), "transfers": len(tx), "banks": sorted(accounts.bank.unique()),
                     "days": generator.DAYS, "start": str(generator.START.date()),
                     "laundering_accounts": int(a.label.sum()), "rings": int(a.ring.replace("", np.nan).nunique()),
@@ -177,7 +226,14 @@ def case_detail(method: str, case_id: str) -> dict | None:
                         "in_aed": round(float(tx[tx.dst == acc].amount.sum()), 0),
                         "out_aed": round(float(tx[tx.src == acc].amount.sum()), 0),
                         "truth": {"label": int(a.loc[acc, "label"]), "typology": a.loc[acc, "typology"], "ring": a.loc[acc, "ring"]}})
-    return {**case, "members_detail": members, "flow": _flow(m, inside, into, outof, a),
+    scores = out.get("scores", {})
+    for x in members:
+        x["risk"] = scores.get(x["account"], 0.0)
+    flow = _flow(m, inside, into, outof, a)
+    roles = {n["id"]: n["role"] for n in flow["nodes"]}
+    for x in members:
+        x["role"] = roles.get(x["account"])
+    return {**case, "members_detail": members, "flow": flow,
             "timeline": [{"ts": str(r.ts), "src": r.src, "dst": r.dst, "amount": round(float(r.amount), 0),
                           "cross_bank": int(r.cross_bank)} for r in inside.head(200).itertuples()],
             "money_in_aed": round(float(into.amount.sum()), 0), "money_out_aed": round(float(outof.amount.sum()), 0),
