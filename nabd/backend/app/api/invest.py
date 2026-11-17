@@ -122,6 +122,7 @@ class BasketItem(BaseModel):
     symbol: str
     weight_pct: float = Field(0, ge=-20, le=10, description="Negative = cut a holding or underweight a name the mandates hold")
     research_only: bool = Field(False, description="Study it in deep research without trading it")
+    test_pct: float | None = Field(None, ge=0.1, le=10, description="Research only: size at which fit and stress test it")
 
 
 class Basket(BaseModel):
@@ -139,6 +140,10 @@ def _validate_basket(body: Basket) -> None:
     unknown = [i.symbol for i in body.items if i.symbol not in BY_SYMBOL]
     if unknown:  # only instruments in Nabd's universe reach the models
         raise HTTPException(422, f"Not in the universe: {', '.join(unknown[:5])}")
+    from ..data.universe import investable
+    eq = [i.symbol for i in body.items if not investable(i.symbol) and not i.research_only]
+    if eq:  # equities can be researched, never traded: the team invests in commodities, gold and bonds
+        raise HTTPException(422, f"Not investable (commodities, gold and bonds only): {', '.join(eq[:5])}")
     if len({i.symbol for i in body.items}) != len(body.items):
         raise HTTPException(422, "Each instrument can appear once")
     for i in body.items:
@@ -159,6 +164,17 @@ async def basket(idea_id: str, body: Basket):
     _validate_basket(body)
     idea = flow.set_basket(idea_id, [i.model_dump() for i in body.items], body.funding, USER)
     return {"idea": idea, "job_id": flow.start_research(idea_id)}
+
+
+@router.post("/ideas/{idea_id}/research-plan")
+async def research_plan(idea_id: str, body: Basket):
+    """The hypotheses deep research will test for this selection, before it runs. The run then uses this plan."""
+    from ..invest import deep
+    idea = _idea(idea_id)
+    if not idea.get("thesis"):
+        raise HTTPException(409, "The thesis is not ready yet")
+    _validate_basket(body)
+    return await deep.preview_plan(idea, [i.model_dump() for i in body.items], body.funding)
 
 
 @router.post("/ideas/{idea_id}/preview")
@@ -207,8 +223,8 @@ def fit(idea_id: str):
     idea = _idea(idea_id)
     if not idea.get("basket"):
         raise HTTPException(409, "Select instruments first")
-    if not flow.trade_lines(idea["basket"]):
-        raise HTTPException(409, "Every line is research only: add a line to cut, add or protect before portfolio fit")
+    if not flow.tested_lines(idea["basket"])[0]:
+        raise HTTPException(409, "Nothing to test: select at least one line")
     return {"fit": flow.compute_fit(idea_id, USER)}
 
 

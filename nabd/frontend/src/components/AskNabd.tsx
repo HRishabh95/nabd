@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { api } from '../lib/api';
 import { register, subscribe } from '../lib/stream';
 import type { EvidenceItem } from '../lib/invest';
+import Review from './Review';
 import Chart, { type ChartSpec } from './Chart';
 import { EvidenceDetail } from '../pages/invest/Deep';
 import type { PageId } from './Chrome';
@@ -22,8 +23,10 @@ const TOOL: Record<string, string> = {
 };
 const SUGGEST: Record<PageId, string[]> = {
   overview: ['Why are markets moving today?', 'How has Brent moved this year?', 'What did the Fed and ECB say most recently?'],
-  forecasting: ['How have oil and Hormuz news moved this month?', 'Show the US 10-year yield over two years'],
-  fraud: ['What does the BIS say recently about payment fraud?'],
+  forecasting: ["What is Nabd's nowcast for UAE real GDP in 2026, and how does it compare with the IMF?", 'How have oil and Hormuz news moved this month?'],
+  fraud: ['How did the fraud detection methods compare?', 'What does the BIS say recently about payment fraud?'],
+  governance: ['Which models are in use, and how was each one tested?'],
+  ask: ['How is the commodity book positioned today?', "What is Nabd's nowcast for UAE real GDP in 2026, and how does it compare with the IMF?", 'Which fraud networks look most urgent?'],
   investment: ['How much of the risk budget is in use, and where from?', 'How would the whole portfolio fare in a Hormuz closure?', 'Compare the ideas in the pipeline'],
 };
 const KEY = 'nabd.ask.thread';
@@ -57,13 +60,20 @@ function Answer({ m, onAsk }: { m: Msg; onAsk: (q: string) => void }) {
           {c.traced} of {c.figures} figures traced</span>}
         <span className="sub">{Object.keys(ev).length} tool results · {m.data.seconds ?? '—'} s</span>
       </div>
+      {m.id && <Review kind="ask" refId={m.id} label="Was this answer useful?" />}
       {!!m.data.follow_ups?.length && <div className="ask-follow">{m.data.follow_ups.map((q) => <button key={q} type="button" className="chip-q" onClick={() => onAsk(q)}>{q}</button>)}</div>}
     </div>
   );
 }
 
-export default function AskNabd({ open, onClose, page }: { open: boolean; onClose: () => void; page: PageId }) {
-  const [thread, setThread] = useState<string | null>(() => { try { return localStorage.getItem(KEY); } catch { return null; } });
+export default function AskNabd({ open, onClose, page, embedded = false, threadId, onThread }: {
+  open: boolean; onClose: () => void; page: PageId; embedded?: boolean;
+  threadId?: string | null; onThread?: (id: string | null) => void;
+}) {
+  const [own, setOwn] = useState<string | null>(() => { try { return localStorage.getItem(KEY); } catch { return null; } });
+  const controlled = threadId !== undefined;
+  const thread = controlled ? threadId : own;
+  const setThread = (id: string | null) => { if (controlled) onThread?.(id); else setOwn(id); };
   const [msgs, setMsgs] = useState<Msg[]>([]);
   const [live, setLive] = useState<Record<string, Live>>({});
   const [q, setQ] = useState('');
@@ -76,7 +86,7 @@ export default function AskNabd({ open, onClose, page }: { open: boolean; onClos
     try { const r = await api.get<{ messages: Msg[] }>(`/api/ask/threads/${tid}`); setMsgs(r.messages); }
     catch { setThread(null); setMsgs([]); }
   }, []);
-  useEffect(() => { if (open && thread) load(thread); if (open) setTimeout(() => input.current?.focus(), 50); }, [open, thread, load]);
+  useEffect(() => { if (open && thread) load(thread); else if (open && !thread) setMsgs([]); if (open) setTimeout(() => input.current?.focus(), 50); }, [open, thread, load]);
   useEffect(() => { try { if (thread) localStorage.setItem(KEY, thread); else localStorage.removeItem(KEY); } catch { /* storage unavailable */ } }, [thread]);
   useEffect(() => {
     const f = (e: Event) => setIdeaId((e as CustomEvent).detail?.idea_id ?? null);
@@ -100,7 +110,7 @@ export default function AskNabd({ open, onClose, page }: { open: boolean; onClos
     return () => clearTimeout(t);
   }, [tail, live]);
   useEffect(() => {
-    if (!open) return;
+    if (!open || embedded) return;
     const k = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
     addEventListener('keydown', k);
     return () => removeEventListener('keydown', k);
@@ -118,14 +128,15 @@ export default function AskNabd({ open, onClose, page }: { open: boolean; onClos
 
   if (!open) return null;
   return (
-    <aside className="ask glass" role="dialog" aria-label="Ask Nabd">
-      <header className="ask-head">
+    <aside className={embedded ? 'ask ask-embedded' : 'ask glass'} role={embedded ? 'region' : 'dialog'} aria-label="Ask Nabd">
+      {!embedded && <header className="ask-head">
         <div><h2>Ask Nabd</h2><p className="sub">Answers from Nabd’s data, models and official sources; every figure is checked{page === 'investment' && ideaId ? ` · about ${ideaId}` : ''}</p></div>
         <div className="head-ctl">
+          <a className="btn small" href="#ask" onClick={onClose}>Open full page</a>
           <button type="button" className="btn small" onClick={() => { setThread(null); setMsgs([]); }}>New thread</button>
           <button type="button" className="btn small" onClick={onClose} aria-label="Close Ask Nabd">Close</button>
         </div>
-      </header>
+      </header>}
       <div className="ask-log scroll" ref={log} aria-live="polite">
         {!msgs.length && <p className="note">Ask about the portfolio, an idea, markets, macro or central-bank news. Nabd calls its own tools, shows each step, and draws charts from the data it computed.</p>}
         {msgs.map((m) => m.role === 'user' ? <div key={m.id} className="ask-msg user"><p>{m.content}</p></div>

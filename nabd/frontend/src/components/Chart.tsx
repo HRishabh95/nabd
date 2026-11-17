@@ -6,7 +6,7 @@ import { useLayoutEffect, useMemo, useRef, useState } from 'react';
 
 export type ChartSpec = {
   type: 'line' | 'bar'; title: string; y_label: string; x: (string | number)[]; x_label?: string | null;
-  series: { name: string; values: (number | null)[] }[]; band?: { lo: (number | null)[]; hi: (number | null)[] } | null;
+  series: { name: string; values: (number | null)[]; dots?: boolean }[]; band?: { lo: (number | null)[]; hi: (number | null)[] } | null;
   evidence?: string[];
 };
 
@@ -111,6 +111,7 @@ function LineChart({ c: full, w, h = 190 }: { c: ChartSpec; w: number; h?: numbe
         {xt.map((i, k) => <text key={i} x={x(i)} y={H - 6} textAnchor={k === 0 ? 'start' : k === xt.length - 1 ? 'end' : 'middle'} className="ch-tick">{fmtX(c.x[i], spanDays)}</text>)}
         {c.band && <path className="ch-band" d={`${path(c.band.hi)}${c.band.lo.map((_, k) => { const i = c.band!.lo.length - 1 - k, v = c.band!.lo[i]; return v == null ? '' : `L${x(i).toFixed(1)},${y(v).toFixed(1)}`; }).join('')}Z`} />}
         {c.series.map((s, i) => <path key={s.name} d={path(s.values)} fill="none" stroke={SERIES[i]} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />)}
+        {c.series.map((s, i) => s.dots ? <g key={`${s.name}-dots`}>{s.values.map((v, k) => v == null ? null : <circle key={k} cx={x(k)} cy={y(v)} r={3.5} fill={SERIES[i]} stroke="#fff" strokeWidth={1.5} />)}</g> : null)}
         {c.series.map((s, i) => n < 40 && s.values.map((v, k) => v != null && (s.values[k - 1] == null && s.values[k + 1] == null) && <circle key={`${s.name}${k}`} cx={x(k)} cy={y(v)} r={3} fill={SERIES[i]} />))}
         {ends.map((e) => <circle key={e.name} cx={x(e.k)} cy={y(e.v!)} r={3} fill={SERIES[e.i]} />)}
         {direct && ends.map((e) => <text key={e.name} x={M.l + iw + 8} y={e.yy + 3.5} className="ch-direct">{e.name.length > maxChars ? `${e.name.slice(0, maxChars - 1)}…` : e.name}<title>{e.name}</title></text>)}

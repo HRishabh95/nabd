@@ -64,10 +64,10 @@ def seed(full: bool = False) -> int:
         return f"({e['cases']} cases, precision {e['precision']:.2f})"
 
     def nowcast():
-        from .ml.forecasting import run as fc
-        o = fc.run()
-        c = o["targets"]["non_oil"]["champion"]
-        return f"(champion {c['model'] if c else '—'})"
+        from .ml.forecasting import ai_eval
+        o = ai_eval.run()
+        v = o["targets"]["non_oil"]["latest"].get(o["targets"]["non_oil"]["pending"], {}).get("models", {})
+        return f"(non-oil {o['targets']['non_oil']['pending']}: {(v.get('kalman_ai') or v.get('kalman') or {}).get('value')})"
 
     def monitor():
         from .invest import monitor as m

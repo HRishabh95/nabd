@@ -16,6 +16,7 @@ from pydantic import BaseModel, Field
 
 from ..core.bus import bus
 from ..core.db import conn
+from ..core.db import store as kv
 from ..data.connectors import docs
 from ..data.universe import BY_SYMBOL
 from ..jobs import runner
@@ -113,7 +114,7 @@ class Synthesis(BaseModel):
     confidence: float
     summary: str = Field(description="One paragraph for the committee, citing evidence ids")
     hypotheses: list[HypothesisVerdict]
-    portfolio_view: str = Field(description="What the findings mean for sizing and implementation against the SAA "
+    portfolio_view: str = Field(description="What the findings mean for sizing and implementation against the strategic benchmark "
                                             "and the risk budget, citing evidence ids")
     what_would_change_our_mind: list[str]
     proposed_triggers: list[Trigger] = Field(description="Watchable triggers for the exit plan, using Nabd series "
@@ -273,8 +274,11 @@ def _relay(idea_id: str, step: str, state: dict):
 def _context(idea: dict) -> dict:
     existing = ideas.active_positions()
     items = idea["basket"]["items"]
-    return {"thesis": idea["thesis"], "basket": idea["basket"], "funding": idea.get("funding"),
-            # traded lines carry a weight; research-only names are studied for evidence but not traded
+    funding = {"equity": "funded pro rata from the book's gold and commodity lines (a relative bet within the book)",
+               "cash": "funded from T-bills in the liquidity sleeve", "mandate": "proceeds of cuts stay in the gold and "
+               "commodity lines"}.get(idea.get("funding") or "equity", idea.get("funding"))
+    return {"thesis": idea["thesis"], "basket": idea["basket"], "funding": funding,
+            # traded lines carry a weight; research-only names are studied and tested at a hypothetical size only
             "traded": {b["symbol"]: b["weight_pct"] for b in items if not b.get("research_only") and b["weight_pct"]},
             "research_only": [b["symbol"] for b in items if b.get("research_only")],
             "names": {b["symbol"]: BY_SYMBOL[b["symbol"]].name for b in idea["basket"]["items"]
@@ -284,6 +288,33 @@ def _context(idea: dict) -> dict:
                                              if i["stage"] == "position"],
                           "existing_active_weights_pct": {k: round(v * 100, 3) for k, v in existing.items()}},
             "as_of": quant.AS_OF.get()}
+
+
+PLAN_TASK = ("Break the thesis into 4-6 testable hypotheses. Say which Nabd tools and data test each one. "
+             "Tools: event_study, conditional_returns, analogs, rolling_beta, relative_performance, "
+             "macro_snapshot, documents, price_stats, macro_betas, ml_rank, news_search, news_theme, filings, "
+             "search_memory, market_regime, plus web search of official sources. You are only planning: "
+             "separate researchers run these tools in the next step. Do not run tools, and do not mention "
+             "whether tools or evidence are available. The framing is the question the committee needs answered.")
+
+
+def _plan_key(idea_id: str, items: list[dict]) -> tuple[str, list[str]]:
+    return f"research_plan:{idea_id}", sorted(f"{i['symbol']}:{'r' if i.get('research_only') else 't'}" for i in items)
+
+
+async def preview_plan(idea: dict, items: list[dict], funding: str) -> dict:
+    """Run only the planning step for a selection and keep the plan, so the team sees the hypotheses before the
+    research runs; the run uses the same plan if the selection has not changed."""
+    lines = [{"symbol": i["symbol"], "weight_pct": 0.0 if i.get("research_only") else float(i.get("weight_pct") or 0),
+              "research_only": bool(i.get("research_only"))} for i in items]
+    ctx = _context({**idea, "basket": {"items": lines}, "funding": funding})
+    res = await gateway.run("deep-plan", RULES, json.dumps({"task": PLAN_TASK, **ctx}, indent=1, default=str),
+                            schema=ResearchPlan)
+    plan = res.parsed.model_dump()
+    plan["framing"] = clean_framing(plan["framing"])
+    key, sig = _plan_key(idea["id"], lines)
+    kv.set(key, {"plan": plan, "selection": sig, "ts": time.time()})
+    return plan
 
 
 # ---------------------------------------------------------------- pipeline
@@ -314,17 +345,17 @@ async def run(idea_id: str, progress, as_of: str | None = None, web: bool = True
         return record
 
     # 1. plan
+    key, sig = _plan_key(idea_id, idea["basket"]["items"])
+    previewed = kv.get(key)
+    if not state["plan"] and previewed and previewed.get("selection") == sig:  # the plan the team already saw
+        state["plan"] = previewed["plan"]
+        kv.set(key, None)  # used once
+        _save(idea_id, state, "using the previewed plan")
     if not state["plan"]:
         progress(0, 5, "Planning hypotheses")
         _save(idea_id, state)
         res = await gateway.run("deep-plan", RULES, json.dumps({
-            "task": "Break the thesis into 4-6 testable hypotheses. Say which Nabd tools and data test each one. "
-                    "Tools: event_study, conditional_returns, analogs, rolling_beta, relative_performance, "
-                    "macro_snapshot, documents, price_stats, macro_betas, ml_rank, news_search, news_theme, filings, "
-                    "search_memory, market_regime, plus web search of official sources. You are only planning: "
-                    "separate researchers run these tools in the next step. Do not run tools, and do not mention "
-                    "whether tools or evidence are available. The framing is the question the committee needs "
-                    "answered.",
+            "task": PLAN_TASK,
             **ctx}, indent=1, default=str), schema=ResearchPlan, on_event=_relay(idea_id, "plan", state))
         state["plan"] = res.parsed.model_dump()
         state["plan"]["framing"] = clean_framing(state["plan"]["framing"])

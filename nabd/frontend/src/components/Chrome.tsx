@@ -1,13 +1,14 @@
 import type { ReactNode } from 'react';
 import { useStreamStatus } from '../lib/stream';
 
-export type PageId = 'overview' | 'investment' | 'forecasting' | 'fraud';
+export type PageId = 'overview' | 'investment' | 'forecasting' | 'fraud' | 'governance' | 'ask';
 
 export const PAGES: { id: PageId; name: string; short?: string; icon: ReactNode }[] = [
   { id: 'overview', name: 'Overview', icon: <><rect x="3.5" y="4.5" width="17" height="15" rx="2.5" /><path d="M7 9h6M7 12.5h10M7 16h10" /><path d="M15.5 8.2l1.4-1.4 1.6 1.6" /></> },
-  { id: 'investment', name: 'Investment', icon: <><path d="M4 20h16" /><path d="M6 20V10M10 20V6M14 20v-8M18 20V8" /></> },
-  { id: 'forecasting', name: 'Forecasting', icon: <><path d="M3.5 17.5 9 12l4 3.5 7.5-8" /><path d="M15.5 7.5h5v5" /></> },
+  { id: 'investment', name: 'Investment', short: 'Invest', icon: <><path d="M4 20h16" /><path d="M6 20V10M10 20V6M14 20v-8M18 20V8" /></> },
+  { id: 'forecasting', name: 'Forecasting', short: 'Forecast', icon: <><path d="M3.5 17.5 9 12l4 3.5 7.5-8" /><path d="M15.5 7.5h5v5" /></> },
   { id: 'fraud', name: 'Fraud network', short: 'Fraud', icon: <><circle cx="6" cy="6" r="2.5" /><circle cx="18" cy="7" r="2.5" /><circle cx="12" cy="18" r="2.5" /><path d="M8.3 7.1 15.6 7M7.3 8.3 10.9 15.8M16.8 9.3 13.3 15.9" /></> },
+  { id: 'governance', name: 'Governance', short: 'Models', icon: <><path d="M12 3.5 19 6v5.5c0 4.2-3 7.6-7 9-4-1.4-7-4.8-7-9V6l7-2.5z" /><path d="m8.8 12 2.2 2.2 4.2-4.4" /></> },
 ];
 
 const LIVE_TEXT = { live: 'Live', connecting: 'Connecting…', polling: 'Reconnecting · polling', offline: 'Backend offline' } as const;

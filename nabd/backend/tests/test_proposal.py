@@ -25,15 +25,15 @@ def test_invented_and_duplicate_symbols_never_reach_the_screen():
         "candidates": [{"symbol": "NVDA", "action": "study", "reason": "x"}, {"symbol": "NVDA", "action": "buy", "reason": "dup"},
                        {"symbol": "FAKE1", "action": "protect", "reason": "invented"}, {"symbol": "tlt", "action": "protect", "reason": "y"},
                        {"symbol": "GLD", "action": "sell everything", "reason": "bad action"}]})
-    assert p["driver_symbols"] == ["NVDA", "AVGO"]
-    assert [(c["symbol"], c["action"]) for c in p["candidates"]] == [("NVDA", "study"), ("TLT", "protect")]
+    assert p["driver_symbols"] == ["NVDA", "AVGO"]  # equities may measure the driver
+    assert [(c["symbol"], c["action"]) for c in p["candidates"]] == [("TLT", "protect")]  # but never become candidates
 
 
 def test_driver_falls_back_to_what_the_idea_is_about():
     p = screening.clean_proposal({"driver_symbols": ["NOPE"], "candidates": [
-        {"symbol": "XLE", "action": "buy", "reason": ""}, {"symbol": "XOM", "action": "study", "reason": ""},
+        {"symbol": "BNO", "action": "buy", "reason": ""}, {"symbol": "USO", "action": "study", "reason": ""},
         {"symbol": "TLT", "action": "protect", "reason": ""}]})
-    assert p["driver_symbols"] == ["XLE", "XOM"]
+    assert p["driver_symbols"] == ["BNO", "USO"]
 
 
 @pytest.mark.parametrize("action,bearish,beta,worst,agrees", [

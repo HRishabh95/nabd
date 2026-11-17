@@ -20,6 +20,7 @@ export const api = {
   get: <T>(p: string) => call<T>('GET', p),
   post: <T>(p: string, b?: unknown) => call<T>('POST', p, b),
   del: <T>(p: string) => call<T>('DELETE', p),
+  put: <T>(p: string, b?: unknown) => call<T>('PUT', p, b),
 };
 
 export type Check = { name: string; ok: boolean; level: 'ok' | 'warn' | 'fail'; detail: string; fix: string | null };

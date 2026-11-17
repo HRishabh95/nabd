@@ -11,12 +11,14 @@ import Overview from './pages/Overview';
 import Investment from './pages/Investment';
 import Forecasting from './pages/Forecasting';
 import Fraud from './pages/Fraud';
+import Governance from './pages/Governance';
+import AskPage from './pages/AskPage';
 import AskNabd from './components/AskNabd';
 import ErrorBoundary from './components/ErrorBoundary';
 
 function currentPage(): PageId {
   const id = location.hash.slice(1);
-  return (PAGES.some((p) => p.id === id) ? id : 'overview') as PageId;
+  return (PAGES.some((p) => p.id === id) || id === 'ask' ? id : 'overview') as PageId;
 }
 
 function App() {
@@ -35,7 +37,7 @@ function App() {
     return () => { removeEventListener('hashchange', onHash); removeEventListener('keydown', onKey); };
   }, []);
   useEffect(() => {
-    document.title = `${PAGES.find((p) => p.id === page)!.name} · Nabd · Central Bank of the UAE`;
+    document.title = `${PAGES.find((p) => p.id === page)?.name ?? (page === "ask" ? "Ask Nabd" : "Nabd")} · Nabd · Central Bank of the UAE`;
   }, [page]);
 
   return (
@@ -47,6 +49,8 @@ function App() {
             {page === 'investment' && <Investment />}
             {page === 'forecasting' && <Forecasting />}
             {page === 'fraud' && <Fraud />}
+            {page === 'governance' && <Governance />}
+            {page === 'ask' && <AskPage />}
           </ErrorBoundary></section>
         </main>
       </div>

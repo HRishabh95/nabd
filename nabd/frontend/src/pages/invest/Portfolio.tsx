@@ -32,8 +32,9 @@ function Holdings({ p }: { p: Portfolio }) {
   );
 }
 
-export function PortfolioView({ ideas, portfolio, onOpen, onWork, onDeleted, initial }: {
+export function PortfolioView({ ideas, portfolio, onOpen, onWork, onDeleted, initial, onNew }: {
   ideas: Idea[]; portfolio: Portfolio | null; onOpen: (id: string) => void; onWork: (id: string) => void; onDeleted: () => void; initial?: string | null;
+  onNew?: () => void;
 }) {
   const [sel, setSel] = useState<string | null>(initial ?? null);
   useEffect(() => { if (initial) setSel(initial); }, [initial]);
@@ -56,14 +57,15 @@ export function PortfolioView({ ideas, portfolio, onOpen, onWork, onDeleted, ini
             <span className="num"><b>{portfolio.risk.budget_used_pct.before.toFixed(0)}%</b> of the {portfolio.active_risk_budget_bp} bp budget · market regime {portfolio.regime.state}</span>
           </div>
         )}
-        <div className="card-head pf-ideas-head"><div><h2>Ideas tested</h2><p className="sub">{ideas.length} ideas · select one to see its deals and research</p></div></div>
+        <div className="card-head pf-ideas-head"><div><h2>Ideas tested</h2><p className="sub">{ideas.length} ideas · select one to see its deals and research</p></div>
+          {onNew && <button className="btn filled small" type="button" onClick={onNew}>New idea</button>}</div>
         <div className="scroll pf-list">
           {groups.filter(([, l]) => l.length).map(([g, l]) => (
             <div key={g} className="pipe-group"><h4>{g} <span className="sub num">{l.length}</span></h4>
               {l.map((i) => { const [tone, label] = status(i); return (
                 <button key={i.id} type="button" className={`idea-row ${sel === i.id ? 'on' : ''}`} onClick={() => setSel(i.id)} aria-pressed={sel === i.id}>
                   <span className="idea-title">{i.thesis?.title ?? i.title}</span>
-                  <span className="sub">{i.basket ? i.basket.items.map((b) => `${b.symbol} ${b.weight_pct > 0 ? '+' : ''}${b.weight_pct}%`).join(' · ') : i.id}</span>
+                  <span className="sub">{i.basket ? i.basket.items.map((b) => (b.research_only || !b.weight_pct ? `${b.symbol} (research)` : `${b.symbol} ${b.weight_pct > 0 ? '+' : ''}${b.weight_pct}%`)).join(' · ') : i.id}</span>
                   <span className={`pill ${tone} idea-pill`}>{label}</span>
                 </button>); })}
             </div>
@@ -110,7 +112,7 @@ function Dossier({ idea, onWork, onOpen, onDeleted }: { idea: Idea; onWork: () =
             {idea.basket ? (
               <table className="deals"><tbody>{idea.basket.items.map((b) => { const p = prices[b.symbol]; const mv = p?.entry && p?.last ? (p.last / p.entry - 1) * 100 : null; return (
                 <tr key={b.symbol}><td><strong>{b.symbol}</strong> <span className="sub">{b.name}</span></td>
-                  <td className={`r num ${b.weight_pct < 0 ? 'worse' : ''}`}>{b.weight_pct > 0 ? 'Buy ' : 'Cut '}{Math.abs(b.weight_pct).toFixed(2)}%</td>
+                  <td className={`r num ${b.weight_pct < 0 ? 'worse' : ''}`}>{b.research_only || !b.weight_pct ? <span className="sub">Research only</span> : `${b.weight_pct > 0 ? 'Buy ' : 'Cut '}${Math.abs(b.weight_pct).toFixed(2)}%`}</td>
                   <td className="r num sub">{mv == null ? '' : `${mv > 0 ? '+' : ''}${mv.toFixed(1)}% since entry`}</td></tr>); })}</tbody></table>
             ) : <p className="sub">No instruments selected yet.</p>}
           </article>

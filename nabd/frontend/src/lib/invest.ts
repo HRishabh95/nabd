@@ -13,7 +13,7 @@ export type Thesis = {
   prefer_index: boolean; drivers: string[]; invalidation: Invalidation[]; questions: string[];
   implementation?: 'add' | 'reduce' | 'hedge'; hedge_themes?: string[]; assumptions?: string[];
 };
-export type BasketItem = { symbol: string; weight_pct: number; name?: string; research_only?: boolean };
+export type BasketItem = { symbol: string; weight_pct: number; name?: string; research_only?: boolean; test_pct?: number };
 export type Point = { text: string; evidence: string[] };
 export type EvidenceItem = { id: string; tool: string; args: Record<string, unknown>; result: unknown };
 export type Research = {
@@ -26,13 +26,13 @@ export type Fit = {
   budget_used_pct: { before: number; after: number }; contributions: { symbol: string; active_pct: number; contribution_pct: number }[];
   corr_with_existing: number | null; active_var95_1d_bp: number; active_var95_usd_mn: number; total_var99_1d_pct: number;
   var_backtest: { exceptions_250d: number; expected: number; limit: number };
-  max_multiple: number; max_total_pct: number; tilt: Record<string, number>; active: Record<string, number>;
+  max_multiple: number; max_total_pct: number; tilt: Record<string, number>; active: Record<string, number>; hypothetical?: Record<string, number>; notional_usd_bn?: number;
   liquidity: { symbol: string; position_usd_mn: number; adv_usd_mn: number; days_at_20pct_adv: number | null }[];
   non_sri_lines: string[]; run_id: string; data: { start: string; end: string; shrinkage: number };
 };
 export type ScenarioRow = { name: string; active_bp: number; active_usd_mn: number; portfolio_pct: number; proxied?: string[]; moves?: Record<string, number>; start?: string; end?: string };
 export type Stress = {
-  replays: ScenarioRow[]; shocks: ScenarioRow[]; worst: { name: string; active_bp: number; active_usd_mn: number };
+  replays: ScenarioRow[]; shocks: ScenarioRow[]; worst: { name: string; active_bp: number; active_usd_mn: number }; hypothetical?: Record<string, number>;
   monte_carlo: { paths: number; horizon_days: number; active_bp_percentiles: Record<string, number>; prob_active_loss: number;
     active_es95_bp: number; histogram: { edges_bp: number[]; counts: number[] } };
   run_id: string;

@@ -8,7 +8,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from .api import ask, data, forecast, fraud, invest, markets, monitor, stream, system
+from .api import ask, data, forecast, fraud, governance, invest, markets, monitor, stream, system
 from .core.bus import bus
 from .core.config import get_settings
 from .core.db import conn
@@ -56,3 +56,4 @@ app.include_router(ask.router)
 app.include_router(forecast.router)
 app.include_router(fraud.router)
 app.include_router(monitor.router)
+app.include_router(governance.router)

@@ -52,10 +52,10 @@ function Facts({ c, label }: { c: Candidate; label: string }) {
   const held = c.held_direct_pct + (c.held_indirect_pct ?? 0);
   return (
     <ul className="sv-facts">
-      {c.moves_with_driver != null && <li>Moves <b className="num">{(Math.abs(c.moves_with_driver) < 0.05 ? 0 : c.moves_with_driver).toFixed(1)}×</b> with {label}</li>}
-      {c.on_worst_days_pct != null && <li>On their worst days <b className={`num ${c.on_worst_days_pct > 0 ? 'better' : 'worse'}`}>{signed(c.on_worst_days_pct)}</b></li>}
-      {held > 0 && <li>We hold <b className="num">{held.toFixed(2)}%</b>{c.held_indirect_pct ? ' through the index funds' : ''}</li>}
-      {c.risk_per_1pct_bp != null && <li>Adds <b className="num">{c.risk_per_1pct_bp.toFixed(0)} bp</b> of risk per 1%</li>}
+      {c.moves_with_driver != null && <li title={`When ${label} move 1%, this has moved ${(Math.abs(c.moves_with_driver) < 0.05 ? 0 : c.moves_with_driver).toFixed(1)}% on average (daily, last 3 years)`}>Moves <b className="num">{(Math.abs(c.moves_with_driver) < 0.05 ? 0 : c.moves_with_driver).toFixed(1)}%</b> per 1% in {label}</li>}
+      {c.on_worst_days_pct != null && <li title={`Average daily move on the days ${label} fell most`}>On {label}’s worst days <b className="num">{signed(c.on_worst_days_pct)}</b></li>}
+      {held > 0 && <li>Held now <b className="num">{held.toFixed(2)}%</b> of the book</li>}
+      {c.risk_per_1pct_bp != null && <li title={`Adding 1% of the book uses ${c.risk_per_1pct_bp.toFixed(0)} bp of the ${'risk budget'}`}>Risk cost of 1%: <b className="num">{c.risk_per_1pct_bp < 15 ? 'low' : c.risk_per_1pct_bp < 40 ? 'medium' : 'high'}</b> <span className="sub">({c.risk_per_1pct_bp.toFixed(0)} bp)</span></li>}
     </ul>
   );
 }
@@ -63,11 +63,17 @@ function Facts({ c, label }: { c: Candidate; label: string }) {
 type Preview = { trades: { symbol: string; name: string; weight_pct: number }[]; research_only: { symbol: string; name: string }[]; funding: string;
   by_class: { name: string; before_pct: number; after_pct: number }[]; lines: { symbol: string; name: string; before_pct: number; after_pct: number }[];
   driver: { label: string; before_pct: number; after_pct: number } | null;
-  risk: { te_bp_after: number; budget_used_before_pct: number; budget_used_after_pct: number; budget_bp: number } | null; warnings: string[] };
+  risk: { te_bp_after: number; budget_used_before_pct: number; budget_used_after_pct: number; budget_bp: number } | null; warnings: string[];
+  hypothetical?: Record<string, number> };
+type Plan = { framing: string; hypotheses: { id: string; statement: string; why_it_matters: string; test: string }[] };
 
 /** Before research starts: what will be traded, what is only studied, and what it does to the portfolio. */
-function ReviewSheet({ p, busy, onBack, onStart }: { p: Preview; busy: boolean; onBack: () => void; onStart: () => void }) {
+function ReviewSheet({ p, busy, onBack, onStart, testPct, onTestPct, plan, planBusy, onPlan }: {
+  p: Preview; busy: boolean; onBack: () => void; onStart: () => void;
+  testPct: number; onTestPct: (v: number) => void; plan: Plan | null; planBusy: boolean; onPlan: () => void;
+}) {
   const d = (a: number, b: number) => { const x = b - a; return Math.abs(x) < 0.005 ? 'no change' : `${x > 0 ? '+' : '−'}${Math.abs(x).toFixed(2)}`; };
+  const hypo = Object.keys(p.hypothetical ?? {});
   return (
     <div className="rv" role="dialog" aria-label="Review before research">
       <div className="rv-head"><h4>Before research starts</h4><button type="button" className="link-btn" onClick={onBack}>Back to the list</button></div>
@@ -76,18 +82,29 @@ function ReviewSheet({ p, busy, onBack, onStart }: { p: Preview; busy: boolean; 
         <div>
           <h5>To trade</h5>
           {p.trades.length ? <ul>{p.trades.map((t) => <li key={t.symbol}><b>{t.weight_pct < 0 ? 'Cut' : 'Add'} {Math.abs(t.weight_pct).toFixed(2)}%</b> {t.name}</li>)}</ul> : <p className="sub">Nothing.</p>}
-          {!!p.research_only.length && <><h5>Research only</h5><p className="sub">{p.research_only.map((r) => r.name).join(' · ')}</p></>}
+          {!!p.research_only.length && <><h5>Research only</h5><p className="sub">{p.research_only.map((r) => r.name).join(' · ')}</p>
+            <label className="rv-test">Test each at <input type="number" className="num" min={0.1} max={10} step={0.1} value={testPct} onChange={(e) => onTestPct(Math.max(0.1, Math.min(10, Number(e.target.value) || 1)))} aria-label="Test size for research-only names, % of the book" />% of the book
+              <span className="sub">Portfolio fit and stress test them at this size: hypothetical, not a trade.</span></label></>}
         </div>
         <div>
-          <h5>Your portfolio</h5>
+          <h5>Your portfolio{hypo.length ? ' (with test sizes)' : ''}</h5>
           <table className="rv-split"><thead><tr><th /><th className="r">Now</th><th className="r">After</th><th className="r">Change</th></tr></thead>
             <tbody>{p.by_class.map((c) => <tr key={c.name} className={Math.abs(c.after_pct - c.before_pct) >= 0.005 ? 'moved' : ''}><td>{c.name}</td><td className="r num">{c.before_pct.toFixed(2)}%</td><td className="r num">{c.after_pct.toFixed(2)}%</td><td className="r num">{d(c.before_pct, c.after_pct)}</td></tr>)}</tbody></table>
           {p.driver && <p className="sub">Moves like {p.driver.label}: <b className="num">{p.driver.before_pct.toFixed(2)}%</b> now, <b className="num">{p.driver.after_pct.toFixed(2)}%</b> after.</p>}
           {p.risk && <p className="sub">Risk budget used: <b className="num">{p.risk.budget_used_before_pct.toFixed(0)}%</b> now, <b className="num">{p.risk.budget_used_after_pct.toFixed(0)}%</b> after (of {p.risk.budget_bp.toFixed(0)} bp).</p>}
         </div>
       </div>
+      <div className="rv-plan">
+        <h5>What deep research will test</h5>
+        <p className="sub">Deep research turns the idea into 4 to 6 hypotheses, tests each with Nabd’s data and official sources, has a red team argue against them, removes claims the evidence does not support, and proposes how to split the selection within the risk budget.</p>
+        {plan ? (
+          <><p className="rv-framing">{plan.framing}</p>
+            <ol className="rv-hyp">{plan.hypotheses.map((h) => <li key={h.id}><b>{h.id}</b> {h.statement}<span className="sub"> How: {h.test}</span></li>)}</ol>
+            <p className="sub">The research will use exactly this plan.</p></>
+        ) : <button className="btn small" type="button" onClick={onPlan} disabled={planBusy}>{planBusy ? 'Writing the hypotheses (about 40 s)…' : 'Preview the hypotheses'}</button>}
+      </div>
       <div className="rv-foot">
-        <span className="sub">Deep research takes about 5 to 10 minutes and runs in the background. It will also propose how to split the selection.</span>
+        <span className="sub">Deep research takes about 5 to 10 minutes and runs in the background.</span>
         <button className="btn small" type="button" onClick={onBack}>Change the selection</button>
         <button className="btn filled small" type="button" onClick={onStart} disabled={busy}>{busy ? 'Starting…' : 'Start deep research'}</button>
       </div>
@@ -128,9 +145,23 @@ export function ScreeningPanel({ idea, onDone }: { idea: Idea; onDone: () => voi
   });
   const study = (s: string) => setResearch((r) => { const x = new Set(r); if (x.has(s)) x.delete(s); else x.add(s); return x; });
 
-  const items = () => [...Object.entries(pick).map(([symbol, weight_pct]) => ({ symbol, weight_pct })), ...studyOnly.map((symbol) => ({ symbol, research_only: true }))];
+  const [testPct, setTestPct] = useState(1);
+  const [plan, setPlan] = useState<Plan | null>(null);
+  const [planBusy, setPlanBusy] = useState(false);
+  const items = (tp = testPct) => [...Object.entries(pick).map(([symbol, weight_pct]) => ({ symbol, weight_pct })), ...studyOnly.map((symbol) => ({ symbol, research_only: true, test_pct: tp }))];
+  async function changeTest(v: number) {
+    setTestPct(v);
+    try { setReview(await api.post<Preview>(`/api/invest/ideas/${idea.id}/preview`, { items: items(v), funding })); } catch { /* keep the last preview */ }
+  }
+  async function previewPlan() {
+    setPlanBusy(true); setErr(null);
+    try { setPlan(await api.post<Plan>(`/api/invest/ideas/${idea.id}/research-plan`, { items: items(), funding })); }
+    catch (e) { setErr((e as Error).message); }
+    finally { setPlanBusy(false); }
+  }
   async function check() {  // first show what the selection does to the portfolio; research starts only on confirm
     setBusy(true); setErr(null);
+    setPlan(null);
     try { setReview(await api.post<Preview>(`/api/invest/ideas/${idea.id}/preview`, { items: items(), funding })); }
     catch (e) { setErr((e as Error).message); }
     finally { setBusy(false); }
@@ -159,14 +190,15 @@ export function ScreeningPanel({ idea, onDone }: { idea: Idea; onDone: () => voi
         </div>
       </div>
       {err && <p className="note worse">{err}</p>}
-      {review && <ReviewSheet p={review} busy={busy} onBack={() => setReview(null)} onStart={submit} />}
+      {review && <ReviewSheet p={review} busy={busy} onBack={() => setReview(null)} onStart={submit}
+        testPct={testPct} onTestPct={changeTest} plan={plan} planBusy={planBusy} onPlan={previewPlan} />}
       {!ready && !err && <div className="sv-wait"><span className="spinner" aria-hidden="true" /> Working out what this idea is really a bet on, then measuring every suggestion against the data.</div>}
       {ready && (
         <div className="scroll sv-body">
           <div className="sv-today">
             <p>Today about <b className="num">{ready.exposure_pct.toFixed(1)}%</b> of the portfolio moves like {label}
               {ready.worst_day_avg_pct != null && <>. On their {ready.worst_days} worst days they fell <b className="num">{Math.abs(ready.worst_day_avg_pct).toFixed(1)}%</b> on average</>}.</p>
-            <p className="sub">We hold: {ready.holdings.map((h) => `${h.symbol} ${h.weight_pct.toFixed(1)}%`).join(' · ')}</p>
+            <p className="sub">The book holds: {ready.holdings.map((h) => `${h.symbol} ${h.weight_pct.toFixed(1)}%`).join(' · ')}</p>
             {ready.source === 'rules' && <p className="sub warn">The assistant was unavailable, so this is a rules-based shortlist. Use “Propose again” when it is back.</p>}
           </div>
           {ready.groups.map((g) => (
@@ -206,10 +238,10 @@ export function ScreeningPanel({ idea, onDone }: { idea: Idea; onDone: () => voi
           <span className="sub">{n ? <>{cut < 0 && <>Hold less: <b className="num">{Math.abs(cut).toFixed(2)}%</b>. </>}{add > 0 && <>Add: <b className="num">{add.toFixed(2)}%</b>. </>}{studyOnly.length ? `${studyOnly.length} to research only.` : ''}</> : 'Tick what to trade, or press Research to study something first.'}</span>
           {cut < 0 && add + cut < 0 && <div className="segmented" role="group" aria-label="Where the money from cuts goes">
             <button type="button" aria-pressed={funding === 'cash'} onClick={() => setFunding('cash')}>Money to T-bills</button>
-            <button type="button" aria-pressed={funding === 'mandate'} onClick={() => setFunding('mandate')}>Keep in equities</button>
+            <button type="button" aria-pressed={funding === 'mandate'} onClick={() => setFunding('mandate')}>Keep in commodities and gold</button>
           </div>}
           {add + cut > 0 && <div className="segmented" role="group" aria-label="Where the money for buys comes from">
-            <button type="button" aria-pressed={funding === 'equity'} onClick={() => setFunding('equity')}>Pay from equities</button>
+            <button type="button" aria-pressed={funding === 'equity'} onClick={() => setFunding('equity')}>Pay from commodities and gold</button>
             <button type="button" aria-pressed={funding === 'cash'} onClick={() => setFunding('cash')}>Pay from cash</button>
           </div>}
         </div>

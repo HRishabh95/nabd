@@ -67,3 +67,22 @@ def test_case_flow_roles_and_layers():
     f = _flow({"B", "C", "D"}, cycle, t([]), t([]), acc)
     nodes = {n["id"]: (n["role"], n["layer"]) for n in f["nodes"]}
     assert nodes == {"B": ("start", 0), "C": ("pass", 1), "D": ("pass", 2)}
+
+
+def test_pattern_is_read_from_the_transfers():
+    from app.ml.fraud.run import pattern
+    assert pattern([("a", "b"), ("b", "c"), ("c", "a")])["key"] == "cycle"
+    assert pattern([("a", "b"), ("b", "c"), ("c", "d")])["key"] == "chain"
+    fan = pattern([("a", "h"), ("b", "h"), ("c", "h"), ("h", "x")])
+    assert fan["key"] == "fan_in" and fan["hub"] == "h"
+    assert pattern([("s", "a"), ("s", "b"), ("a", "t"), ("b", "t")])["key"] == "scatter_gather"
+
+
+def test_note_keeps_only_transfers_that_exist():
+    from app.ml.fraud.explain import Cited, Note, _grounded
+    d = {"timeline": [{"ts": "2026-11-05 10:24:00", "src": "A", "dst": "B", "amount": 179822.0, "cross_bank": 0}]}
+    note = Note(headline="h", why_flagged=["w"], connections="c", next_steps=["n"], caveats="x", transfers=[
+        Cited(ts="wrong", src="A", dst="B", amount=179822, why="real"),
+        Cited(ts="2026-11-05 11:00:00", src="B", dst="C", amount=5000, why="invented")])
+    out = _grounded(note, d)
+    assert [t.why for t in out.transfers] == ["real"] and out.transfers[0].ts == "2026-11-05 10:24:00"

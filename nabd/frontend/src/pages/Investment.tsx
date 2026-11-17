@@ -30,11 +30,11 @@ function Composer({ onCreated }: { onCreated: (id: string) => void }) {
   return (
     <form className="composer" onSubmit={submit}>
       <textarea rows={3} value={text} onChange={(e) => setText(e.target.value)} aria-label="New idea"
-        placeholder="An idea in your own words, e.g. “Japanese banks benefit as the BoJ normalises; overweight for 6 months”" />
+        placeholder="An idea in your own words, e.g. “Gold keeps rising as central banks buy and real yields fall; overweight gold for 6 months”" />
       <div className="composer-row">
         <div className="segmented" role="group" aria-label="Horizon">
           <button type="button" aria-pressed={horizon === 'tactical'} onClick={() => setHorizon('tactical')}>Tactical · MRMC</button>
-          <button type="button" aria-pressed={horizon === 'strategic'} onClick={() => setHorizon('strategic')}>Strategic · SAA</button>
+          <button type="button" aria-pressed={horizon === 'strategic'} onClick={() => setHorizon('strategic')}>Strategic · Board</button>
         </div>
         <button className="btn filled small" type="submit" disabled={busy || text.trim().length < 3}>{busy ? 'Adding…' : 'Add idea'}</button>
       </div>
@@ -102,8 +102,8 @@ function Selected({ idea }: { idea: Idea }) {
   const items = idea.basket?.items ?? [];
   const trades = items.filter((b) => !b.research_only && b.weight_pct), study = items.filter((b) => b.research_only || !b.weight_pct);
   const net = trades.reduce((a, b) => a + b.weight_pct, 0);
-  const money = net > 0 ? `Paid for from ${idea.funding === 'cash' ? 'cash (money market)' : 'the equity mandates, pro rata'}.`
-    : net < 0 ? `The money from cuts ${idea.funding === 'mandate' ? 'stays in the equity mandates' : 'goes to Treasury bills'}.` : '';
+  const money = net > 0 ? `Paid for from ${idea.funding === 'cash' ? 'cash (money market)' : 'the gold and commodity lines, pro rata'}.`
+    : net < 0 ? `The money from cuts ${idea.funding === 'mandate' ? 'stays in the gold and commodity lines' : 'goes to Treasury bills'}.` : '';
   return (<>
     <h4>To trade</h4>
     {trades.length ? <ul className="bul">{trades.map((b) => <li key={b.symbol}><strong>{b.weight_pct < 0 ? 'Cut' : 'Add'} {Math.abs(b.weight_pct).toFixed(2)}%</strong> {b.name} ({b.symbol})</li>)}</ul>
@@ -122,7 +122,13 @@ function Workspace({ ideaId, job, onJob, initial, onDeleted }: { ideaId: string;
   const [confirmDel, setConfirmDel] = useState(false);
 
   const load = useCallback(async (follow = false) => {
-    const r = await api.get<{ idea: Idea; events: IdeaEvent[] }>(`/api/invest/ideas/${ideaId}`);
+    // a refresh can race a server restart or a job's write: retry once, then keep the last good view
+    let r: { idea: Idea; events: IdeaEvent[] } | null = null;
+    for (let attempt = 0; attempt < 2 && !r; attempt++) {
+      try { r = await api.get<{ idea: Idea; events: IdeaEvent[] }>(`/api/invest/ideas/${ideaId}`); }
+      catch { if (attempt === 0) await new Promise((ok) => setTimeout(ok, 1200)); }
+    }
+    if (!r) return;
     setIdea(r.idea); setEvents(r.events);
     if (follow) setView(latestView(r.idea));
   }, [ideaId]);
@@ -259,7 +265,7 @@ export default function Investment() {
   const byStage = STAGES.map((s) => [s, ideas.filter((i) => i.stage === s)] as const).filter(([, l]) => l.length);
   return (
     <>
-      <PageHeader title="Investment" lede="Ideas judged as tilts against the Strategic Asset Allocation, inside the Board’s risk budget"
+      <PageHeader title="Investment" lede="Ideas tested against the commodity book’s benchmark, inside the Board’s risk budget"
         actions={<div className="segmented" role="tablist" aria-label="Investment view">
           <button type="button" role="tab" aria-pressed={mode === 'portfolio'} onClick={() => setMode('portfolio')}>Portfolio</button>
           <button type="button" role="tab" aria-pressed={mode === 'ideas'} onClick={() => { setInitial(undefined); setMode('ideas'); }}>Ideas{alerts.filter((a) => a.status === 'open').length ? ` · ${alerts.filter((a) => a.status === 'open').length} alerts` : ''}</button>
@@ -267,6 +273,7 @@ export default function Investment() {
       {loadErr && !ideas.length && <p className="note worse" role="alert">Could not reach Nabd’s server ({loadErr}). It reconnects automatically; the badge at the top right shows when it is back.</p>}
       {mode === 'portfolio' ? (
         <PortfolioView ideas={ideas} portfolio={portfolio} initial={sel}
+          onNew={() => { setInitial(undefined); setMode('ideas'); setTimeout(() => document.querySelector<HTMLTextAreaElement>('textarea[aria-label="New idea"]')?.focus(), 50); }}
           onWork={(id) => { setSel(id); setInitial(undefined); setMode('ideas'); }}
           onOpen={(id) => { setSel(id); setInitial('research'); setMode('ideas'); }}
           onDeleted={() => { setSel(null); load().catch(() => undefined); }} />
@@ -283,7 +290,7 @@ export default function Investment() {
                   <button key={i.id} type="button" className={`idea-row ${sel === i.id ? 'on' : ''}`} onClick={() => setSel(i.id)}
                     aria-pressed={sel === i.id} aria-label={`${i.thesis?.title ?? i.title}, ${i.id}, ${STAGE_LABEL[i.stage]}${i.position?.health ? `, health ${i.position.health.score}` : ''}`}>
                     <span className="idea-title">{i.thesis?.title ?? i.title}</span>
-                    <span className="sub num">{i.id}{i.basket ? ` · ${i.basket.total_pct}%` : ''}{jobs[i.id] ? ' · working…' : ''}</span>
+                    <span className="sub num">{i.id}{i.basket ? (i.basket.total_pct ? ` · ${i.basket.total_pct}%` : ' · research only') : ''}{jobs[i.id] ? ' · working…' : ''}</span>
                     {i.position?.health && <span className={`hscore num ${i.position.health.score < 60 ? 'worse' : i.position.health.score < 85 ? 'warn' : 'better'}`}>{i.position.health.score}</span>}
                   </button>
                 ))}

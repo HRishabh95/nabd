@@ -70,15 +70,18 @@ MODELS = {
                   "real flows",
     },
     "nowcast": {
-        "name": "UAE GDP nowcast", "version": "1.0", "tier": "High",
-        "purpose": "Nowcast quarterly real and non-oil GDP growth (y/y) before the official release",
-        "method": "Dynamic factor model on real-activity indicators (Hormuz transits, UAE port calls, imports, "
-                  "exports, UAE equities) bridged to GDP; MIDAS on the factor; a ridge bridge on four indicators; a "
-                  "news model on GDELT tone and volume; an equal-weight ensemble; a last-release benchmark",
-        "data": "FCSC first releases (release record with sources), IMF PortWatch, FRED, Yahoo Finance, GDELT",
-        "validation": "Pseudo real-time backtest at three points per quarter, scored against first releases",
-        "limits": "About 16 target quarters; one contraction (Q2 2026) in the record; FCSC data compiled from "
-                  "official releases because the FCSC site blocks automated access",
+        "name": "UAE GDP nowcast (Kalman, with and without AI news)", "version": "2.0", "tier": "High",
+        "purpose": "Nowcast quarterly real and non-oil GDP growth (y/y) before FCSC publishes, and measure what "
+                   "LLM-read news adds to the same model",
+        "method": "Dynamic factor model with GDP in the state, Kalman filter and smoother (two-step estimation), in "
+                  "three versions: hard data; plus GDELT tone; plus AI news signals (LLM labels of UAE business "
+                  "headlines, labelled blind to dates, as a monthly diffusion index with shrinkage). Exact contribution "
+                  "and revision breakdowns",
+        "data": "FCSC first releases, IMF PortWatch, Yahoo Finance, GDELT GKG headlines and tone, Codex labels",
+        "validation": "Pseudo real-time backtest at three points per quarter against first releases; coverage of the "
+                      "model's own 70% and 90% bands",
+        "limits": "13 released quarters, one contraction; headlines are a sample of GDELT's English feed; LLM "
+                  "labels are blind to dates but the model may still recognise famous events from a headline's text",
     },
     "thesis": {
         "name": "Thesis parser and research writer (LLM)", "version": "1.0", "tier": "Medium",

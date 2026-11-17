@@ -42,6 +42,15 @@ def returns(symbols: list[str], lookback: int | None = LOOKBACK) -> pd.DataFrame
     return r
 
 
+def ewma_sigma(x: np.ndarray, lam: float = 0.94, warm: int = 60) -> np.ndarray:
+    """One-day-ahead volatility for each day from the days before it (RiskMetrics EWMA)."""
+    s2 = np.empty(len(x))
+    s2[0] = float(np.var(x[:warm])) if len(x) > 1 else 1e-8
+    for t in range(1, len(x)):
+        s2[t] = lam * s2[t - 1] + (1 - lam) * x[t - 1] ** 2
+    return np.sqrt(np.maximum(s2, 1e-12))
+
+
 def ewma_weights(n: int, half_life: int = HALF_LIFE) -> np.ndarray:
     w = 0.5 ** (np.arange(n)[::-1] / half_life)
     return w / w.sum()
@@ -115,12 +124,20 @@ def analyse(active: dict[str, float], existing_active: dict[str, float] | None =
         return float(-v), float(-x[x <= v].mean())
 
     av95, ae95 = var_es(act_pnl, 0.95)
-    tv99, te99 = var_es(tot_pnl, 0.99)
-    # VaR backtest: exceptions of the 99% 1-day total VaR (rolling 500-day window) over the last 250 days
-    exc = 0
+    # Total VaR by filtered historical simulation (Hull and White): past returns are rescaled by today's volatility
+    # (RiskMetrics EWMA, lambda 0.94), so the VaR rises as soon as markets turn volatile instead of waiting for the
+    # window to fill with bad days. Commodity volatility comes in bursts, which plain historical VaR misses.
+    sig = ewma_sigma(tot_pnl)
+    z = tot_pnl / sig
+    q01 = np.quantile(z[-750:], 0.01)
+    tv99 = float(-q01 * sig[-1] * 1.0)
+    te99 = float(-z[-750:][z[-750:] <= q01].mean() * sig[-1])
+    # VaR backtest: exceptions of the 99% 1-day total VaR over the last 250 days, each day's VaR from data before it
+    exc = exc_plain = 0
     if len(tot_pnl) > 750:
         for i in range(len(tot_pnl) - 250, len(tot_pnl)):
-            exc += int(tot_pnl[i] < np.quantile(tot_pnl[i - 500:i], 0.01))
+            exc += int(tot_pnl[i] < np.quantile(z[i - 500:i], 0.01) * sig[i])
+            exc_plain += int(tot_pnl[i] < np.quantile(tot_pnl[i - 500:i], 0.01))
 
     by_symbol = sorted(
         [{"symbol": s, "active_pct": round(float(a_tot[i]) * 100, 3),
@@ -138,7 +155,9 @@ def analyse(active: dict[str, float], existing_active: dict[str, float] | None =
         "corr_with_existing": corr_with_existing,
         "active_var95_1d_bp": round(av95 * 1e4, 1), "active_es95_1d_bp": round(ae95 * 1e4, 1),
         "total_var99_1d_pct": round(tv99 * 100, 3), "total_es99_1d_pct": round(te99 * 100, 3),
-        "var_backtest": {"exceptions_250d": exc, "expected": 2.5, "limit": 4},
+        "var_backtest": {"exceptions_250d": exc, "expected": 2.5, "limit": 4,
+                         "method": "Filtered historical simulation (EWMA volatility, lambda 0.94), 500-day window",
+                         "plain_historical_exceptions": exc_plain},
         "notional_usd_bn": reserve.NOTIONAL_USD_BN,
         "active_var95_usd_mn": round(av95 * reserve.NOTIONAL_USD_BN * 1e3, 1),
         "missing_history": missing,
