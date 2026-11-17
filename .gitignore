@@ -1,0 +1,25 @@
+# secrets and local configuration
+.env
+**/.env
+!**/.env.example
+
+# data Nabd downloads or creates at run time (re-created by `make seed`)
+nabd/data/
+*.sqlite
+*.sqlite-*
+
+# dependencies, builds, caches
+**/.venv/
+**/node_modules/
+**/dist/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+*.tsbuildinfo
+.DS_Store
+
+# local tool settings, not part of the product
+.claude/
+.impeccable/
+.taste-skill/

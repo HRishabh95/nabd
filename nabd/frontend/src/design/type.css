@@ -1,0 +1,78 @@
+/* Type and density, macOS Human Interface Guidelines. Loaded last so it settles line heights and control sizes
+   for the token scale defined in glass.css (--fs-*). Regular controls 28px tall, small 24px; tables 7px rows. */
+
+/* headings and figures */
+.large-title h1 { line-height: 32px; letter-spacing: -0.02em; }
+.large-title p { font-size: var(--fs-body); line-height: 18px; margin-top: 2px; }
+.pt-brand img { height: 52px; }
+.card h2 { line-height: 20px; letter-spacing: -0.01em; }
+.card h3, .panel h3 { font-size: var(--fs-body); line-height: 18px; font-weight: 600; }
+.panel h4, .ws h4 { font-size: var(--fs-callout); line-height: 16px; }
+.big { line-height: 34px; letter-spacing: -0.02em; }
+.mid { line-height: 28px; }
+.metric dd { line-height: 28px; }
+.metric { padding: 10px 14px; }
+.ws-title h2 { font-size: var(--fs-title2); line-height: 22px; }
+.health .big { font-size: var(--fs-display-l); line-height: 40px; }
+.idea-row .hscore { font-size: var(--fs-title2); }
+.gauge-row strong { font-size: var(--fs-title1); }
+
+/* text */
+.sub { line-height: 16px; }
+.note { font-size: var(--fs-callout); line-height: 17px; }
+.lead { font-size: var(--fs-body); line-height: 19px; }
+.bul, .points { font-size: var(--fs-body); line-height: 18px; }
+.list .t { font-size: var(--fs-body); }
+.list .d { font-size: var(--fs-callout); }
+.list li { padding: 8px 0; }
+
+/* controls */
+.btn { height: 28px; padding: 0 12px; font-size: var(--fs-body); }
+.btn.small { height: 24px; padding: 0 10px; font-size: var(--fs-callout); }
+.segmented { border-radius: 7px; }
+.segmented button { height: 22px; padding: 0 10px; border-radius: 5px; font-size: var(--fs-callout); }
+.pill { height: 20px; padding: 0 8px; border-radius: 10px; }
+.chip { font-size: var(--fs-subhead); padding: 2px 8px; }
+
+/* tables: denser rows */
+th { padding: 0 8px 6px; }
+td { padding: 7px 8px; }
+.screen td, .scen td { padding: 6px 8px; font-size: var(--fs-body); }
+
+/* Density (laptop screens): smaller chrome so the work gets the room. */
+.main { padding: 12px 16px 76px; }
+.large-title { margin-bottom: 10px; gap: 14px; }
+.large-title h1 { font-size: var(--fs-title1); line-height: 26px; }
+.large-title p { font-size: var(--fs-callout); line-height: 16px; }
+.pt-brand { padding-right: 14px; }
+.pt-brand img { height: 40px; }
+.grid.fill { gap: 10px; }
+.card { padding: 12px 14px; border-radius: 16px; }
+.card-head { margin-bottom: 8px; }
+.card h2 { font-size: var(--fs-body); line-height: 18px; font-weight: 600; }
+.card h2 + .sub, .card-head .sub { font-size: var(--fs-subhead); line-height: 15px; }
+.metrics { gap: 10px; margin-bottom: 10px; }
+.metric { padding: 8px 12px; border-radius: 14px; }
+.metric dt { font-size: var(--fs-subhead); }
+.metric dd { font-size: var(--fs-title2); line-height: 22px; }
+.metric span { font-size: var(--fs-subhead); }
+.dock { bottom: 10px; padding: 4px; gap: 2px; border-radius: 24px; }
+.tab { min-width: 84px; padding: 5px 12px 4px; gap: 2px; border-radius: 20px; }
+.tab svg { width: 18px; height: 18px; }
+.panel { padding: 10px 12px; border-radius: 12px; }
+.ws { gap: 8px; }
+.ws-title h2 { font-size: var(--fs-title3); line-height: 20px; }
+.stepper .dot { width: 22px; height: 22px; font-size: var(--fs-subhead); }
+.stepper::before { top: 11px; }
+.toast { bottom: 80px; }
+.ask { bottom: 76px; top: 12px; }
+
+/* phone: the dock fits the screen; tabs share the width and labels shrink, as in an iOS tab bar */
+@media (max-width: 520px) {
+  .dock { left: 8px; right: 8px; transform: none; justify-content: space-between; }
+  .tab { min-width: 0; flex: 1 1 0; padding: 5px 2px 4px; }
+  .tab span { font-size: 10px; line-height: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+  .dock-sep { display: none; }
+  .tab-long { display: none; }
+}
+@media (min-width: 521px) { .tab-short { display: none; } }

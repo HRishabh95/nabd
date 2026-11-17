@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Nabd · Model room · Central Bank of the UAE</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;500;600;700&family=Noto+Sans+Arabic:wght@500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="nabd.css">
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+
+<header class="topbar">
+  <div class="topbar-inner">
+    <div class="brand">
+      <img class="emblem" src="assets/cbuae-logo.png" alt="Central Bank of the U.A.E." onerror="this.hidden=true;this.nextElementSibling.hidden=false">
+      <span class="emblem-fallback" hidden>Central Bank of the U.A.E.</span>
+      <span class="brand-divider" aria-hidden="true"></span>
+      <span class="product"><span class="product-en">Nabd</span><span class="product-ar" lang="ar" dir="rtl">نبض</span></span>
+    </div>
+    <div class="topbar-meta">
+      <span class="stamp">Data 16 Nov 2026, 06:00 GST · on premise</span>
+      <label class="role"><span>Viewing as</span><select id="role"></select></label>
+    </div>
+  </div>
+</header>
+
+<main id="main" class="page">
+  <section class="screen" id="room">
+    <div class="room-head">
+      <div>
+        <h1>Model room</h1>
+        <p class="lede">Every model Nabd runs for the Central Bank, from the data it reads to the decision it supports, with its live performance and its standing under the Model Management Standards.</p>
+      </div>
+      <div class="room-side">
+        <div class="seg" role="group" aria-label="Lens" id="lens">
+          <button type="button" aria-pressed="true" data-lens="all">Everything</button>
+          <button type="button" aria-pressed="false" data-lens="risk">Risk view</button>
+          <button type="button" aria-pressed="false" data-lens="ai">AI view</button>
+        </div>
+        <button class="btn primary" type="button" id="board-btn">Prepare Board report</button>
+      </div>
+    </div>
+    <dl class="inv-strip" id="inv-strip"></dl>
+    <div class="room" id="room-grid" data-lens="all"></div>
+    <p class="foot-note">Illustrative data and models, synthetic economy, for demonstration. Structure follows CBUAE’s Model Management Standards and its 2026 guidance on AI and machine learning.</p>
+  </section>
+</main>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script src="data.js"></script>
+<script src="data2.js"></script>
+<script src="data3.js"></script>
+<script src="netlab.js"></script>
+<script src="charts.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

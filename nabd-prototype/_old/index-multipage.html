@@ -1,0 +1,440 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Nabd · Central Bank of the UAE</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;500;600;700&family=Noto+Sans+Arabic:wght@500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="nabd.css">
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+
+<header class="topbar">
+  <div class="topbar-inner">
+    <a class="brand" href="#home" aria-label="Nabd home, Central Bank of the UAE">
+      <img class="emblem" src="assets/cbuae-logo.png" alt="Central Bank of the U.A.E." onerror="this.hidden=true;this.nextElementSibling.hidden=false">
+      <span class="emblem-fallback" hidden>Central Bank of the U.A.E.</span>
+      <span class="brand-divider" aria-hidden="true"></span>
+      <span class="product"><span class="product-en">Nabd</span><span class="product-ar" lang="ar" dir="rtl">نبض</span></span>
+    </a>
+    <nav class="nav" aria-label="Main">
+      <a href="#room" data-route="room">Model room</a>
+      <a href="#home" data-route="home">Briefing</a>
+      <span class="nav-sep" aria-hidden="true"></span>
+      <a href="#nowcast" data-route="nowcast">Nowcast</a>
+      <a href="#forecast" data-route="forecast">Forecasting</a>
+      <a href="#fraud" data-route="fraud">Fraud</a>
+      <a href="#invest" data-route="invest">Investment</a>
+      <a href="#scenarios" data-route="scenarios">Scenarios</a>
+      <a href="#gov" data-route="gov">Governance</a>
+    </nav>
+    <div class="topbar-meta">
+      <label class="role">
+        <span>Viewing as</span>
+        <select id="role"></select>
+      </label>
+    </div>
+  </div>
+  <div class="statusline">
+    <div class="statusline-inner">
+      <span>Data 16 Nov 2026, 06:00 GST</span>
+      <span class="dot-sep" aria-hidden="true"></span>
+      <span>Models on premise · language model in Azure UAE North, aggregates only</span>
+      <span class="illustrative">Illustrative data, synthetic economy</span>
+    </div>
+  </div>
+</header>
+
+<main id="main" class="page">
+
+  <!-- ===================== MODEL ROOM ===================== -->
+  <section class="screen" id="room" hidden>
+    <div class="room-head">
+      <div>
+        <h1>Model room</h1>
+        <p class="lede">Every model Nabd runs for the Central Bank, from the data it reads to the decision it supports, with its live performance and its standing under the Model Management Standards.</p>
+      </div>
+      <div class="room-side">
+        <div class="seg" role="group" aria-label="Lens" id="lens">
+          <button type="button" aria-pressed="true" data-lens="all">Everything</button>
+          <button type="button" aria-pressed="false" data-lens="risk">Risk view</button>
+          <button type="button" aria-pressed="false" data-lens="ai">AI view</button>
+        </div>
+        <button class="btn primary" type="button" id="board-btn">Prepare Board report</button>
+      </div>
+    </div>
+    <dl class="inv-strip" id="inv-strip"></dl>
+    <div class="room" id="room-grid" data-lens="all"></div>
+  </section>
+
+  <!-- ===================== HOME ===================== -->
+  <section class="screen" id="home" hidden>
+    <div class="hero">
+      <div class="hero-head">
+        <div>
+          <h1 id="greet"></h1>
+          <p class="lede" id="greet-sub"></p>
+        </div>
+        <div class="hero-figure">
+          <span class="hero-label">Non-oil growth, Q4 2026 nowcast</span>
+          <span class="hero-value num" id="home-now"></span>
+          <span class="hero-note" id="home-now-note"></span>
+        </div>
+      </div>
+      <div class="chart" id="home-chart"></div>
+    </div>
+
+    <div class="grid">
+      <article class="panel span-6" aria-labelledby="brief-h">
+        <header class="panel-head"><h2 id="brief-h">This morning’s briefing</h2><span class="meta">Prepared 06:15 from model runs</span></header>
+        <ol class="brief" id="brief"></ol>
+      </article>
+      <article class="panel span-3" aria-labelledby="hn-h">
+        <header class="panel-head"><h2 id="hn-h">What moved this week</h2><a class="link" href="#nowcast">All releases</a></header>
+        <ul class="news compact" id="home-news"></ul>
+      </article>
+      <article class="panel span-3" aria-labelledby="trust-h">
+        <header class="panel-head"><h2 id="trust-h">Data and trust</h2><a class="link" href="#gov">Governance</a></header>
+        <dl class="kv" id="trust"></dl>
+      </article>
+
+      <a class="panel span-4 way" href="#scenarios">
+        <span class="way-title">Run a scenario</span>
+        <span class="way-desc">Describe a shock in plain words. Nabd sets the model up, runs 1,000 simulations on the payment network and shows the range of outcomes.</span>
+        <span class="chart way-chart" id="way-scn-chart"></span>
+        <span class="way-preview" id="way-scn"></span>
+      </a>
+      <a class="panel span-4 way" href="#nowcast">
+        <span class="way-title">See what moved the nowcast</span>
+        <span class="way-desc">This week’s estimate, its uncertainty, and the data release behind every change.</span>
+        <span class="chart way-chart" id="way-now-chart"></span>
+        <span class="way-preview" id="way-now"></span>
+      </a>
+      <a class="panel span-4 way" href="#time">
+        <span class="way-title">Open the time machine</span>
+        <span class="way-desc">See exactly what Nabd showed on any past date, and how early it was against the official GDP estimate.</span>
+        <span class="chart way-chart" id="way-time-chart"></span>
+        <span class="way-preview" id="way-time"></span>
+      </a>
+
+      <article class="panel span-12" aria-labelledby="team-h">
+        <header class="panel-head"><h2 id="team-h">Recent team work</h2><span class="meta">Across departments, filtered by what your role may see</span></header>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Item</th><th>Type</th><th>By</th><th>When</th><th class="r">Status</th></tr></thead>
+            <tbody id="team"></tbody>
+          </table>
+        </div>
+      </article>
+    </div>
+  </section>
+
+  <!-- ===================== SCENARIOS ===================== -->
+  <section class="screen" id="scenarios" hidden>
+    <div class="title-row">
+      <div>
+        <h1>Scenarios</h1>
+        <p class="lede">Describe a shock. Nabd turns it into model settings you can check, runs 1,000 simulations on the firm-to-firm payment network and shows the full range of outcomes.</p>
+      </div>
+      <button class="btn" type="button" id="save-btn">Save as playbook</button>
+    </div>
+
+    <div class="grid">
+      <aside class="panel span-4 composer" aria-labelledby="comp-h">
+        <h2 id="comp-h">Scenario</h2>
+        <label class="field">
+          <span class="label">Describe it in plain words</span>
+          <textarea id="scn-text" rows="3">Strait of Hormuz closed for 30 days, Brent at $95</textarea>
+        </label>
+        <button class="btn ghost small" type="button" id="parse-btn">Read my description</button>
+        <p class="hint" id="parse-note">Nabd’s language model reads the sentence and fills in the settings below. It never produces figures; those come from the run.</p>
+
+        <h3 class="sub-h">Model settings</h3>
+        <label class="field">
+          <span class="label">Closure length <output id="days-out" class="num">30 days</output></span>
+          <input type="range" id="days" min="7" max="60" value="30">
+        </label>
+        <label class="field">
+          <span class="label">Brent crude, US$ per barrel</span>
+          <input class="input num" type="number" id="brent" min="40" max="150" value="95">
+        </label>
+        <label class="field">
+          <span class="label">Policy response</span>
+          <select class="input" id="response">
+            <option value="none">None</option>
+            <option value="facility">AED 30 bn liquidity facility and payroll bridge</option>
+          </select>
+        </label>
+        <button class="btn primary block" type="button" id="run-btn">Run 1,000 simulations</button>
+        <p class="run-state" id="run-state" role="status"></p>
+
+        <h3 class="sub-h">Recent runs</h3>
+        <ul class="runs" id="runs"></ul>
+      </aside>
+
+      <div class="span-8 results">
+        <article class="panel" aria-labelledby="fan-h">
+          <header class="panel-head">
+            <div><h2 id="fan-h">Non-oil GDP against the no-shock baseline</h2><p class="meta">Percentage points, 90 days from the shock. Bands hold 60% and 90% of the 1,000 runs.</p></div>
+            <div class="legend" id="fan-legend"></div>
+          </header>
+          <div class="chart" id="fan-chart"></div>
+          <p class="source" id="fan-source"></p>
+        </article>
+
+        <article class="panel" aria-labelledby="play-h">
+          <header class="panel-head">
+            <div><h2 id="play-h">Watch the shock move through the economy</h2><p class="meta">624 firms sampled from the payment network. A firm turns red when its payments show stress and bronze while it recovers.</p></div>
+            <button class="btn primary small play-btn" type="button" id="play-btn" aria-pressed="false">Play</button>
+          </header>
+          <div class="play-grid">
+            <div class="web" id="play-web" role="img" aria-label="Firm network during the scenario"></div>
+            <dl class="play-stats" id="play-stats"></dl>
+          </div>
+          <div class="slider-row"><label for="play-day">Day <output id="play-day-out" class="num">0</output></label><input type="range" id="play-day" min="0" max="90" value="0"></div>
+        </article>
+
+        <div class="kpis" id="scn-kpis"></div>
+
+        <article class="panel" aria-labelledby="brk-h">
+          <header class="panel-head"><div><h2 id="brk-h">Which firms run out of cash first</h2><p class="meta">Bars drawn to scale on one 90-day axis</p></div></header>
+          <div class="table-wrap">
+            <table class="break-table">
+              <thead><tr><th>Firm</th><th class="r">Cash buffer</th><th class="axis-col">Days 0 to 90</th><th class="r">Runs out</th><th class="r">Lenders</th></tr></thead>
+              <tbody id="brk"></tbody>
+            </table>
+          </div>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== FORECASTING ===================== -->
+  <section class="screen" id="forecast" hidden>
+    <div class="title-row">
+      <div><h1>Forecasting</h1><p class="lede" id="fc-lede"></p></div>
+      <div class="actions"><a class="btn" href="#time">Track record</a><button class="btn primary" type="button" id="retrain-btn">Retrain models</button></div>
+    </div>
+    <div class="grid">
+      <article class="panel span-8" aria-labelledby="fc-h">
+        <header class="panel-head"><div><h2 id="fc-h">Non-oil GDP growth, history and four-quarter forecast</h2><p class="meta">Year on year. Solid: first official estimates. Fan: the ensemble’s 70% and 90% ranges.</p></div><div class="legend" id="fc-legend"></div></header>
+        <div class="chart" id="fc-chart"></div>
+        <div class="fc-strip" id="fc-strip"></div>
+      </article>
+      <article class="panel span-4" aria-labelledby="feat-h">
+        <header class="panel-head"><div><h2 id="feat-h">What drives the forecast</h2><p class="meta">Average contribution of each signal to the forecast, in points, last 8 quarters</p></div></header>
+        <ul class="hbars" id="feat"></ul>
+      </article>
+      <article class="panel span-7" aria-labelledby="lb-h">
+        <header class="panel-head"><div><h2 id="lb-h">Model leaderboard</h2><p class="meta">Average error against the first official estimate, in points, backtested over 10 quarters</p></div></header>
+        <div class="table-wrap"><table><thead><tr><th>Model</th><th class="r">Weight in ensemble</th><th class="r">Error, 1 quarter ahead</th><th class="r">Error, 4 quarters ahead</th><th class="r">Last trained</th></tr></thead><tbody id="lb"></tbody></table></div>
+      </article>
+      <article class="panel span-5" aria-labelledby="hz-h">
+        <header class="panel-head"><div><h2 id="hz-h">Error by forecast horizon</h2><p class="meta">Lower is better</p></div><div class="legend" id="hz-legend"></div></header>
+        <div class="chart" id="hz-chart"></div>
+      </article>
+    </div>
+  </section>
+
+  <!-- ===================== INVESTMENT ===================== -->
+  <section class="screen" id="invest" hidden>
+    <div class="title-row">
+      <div><h1>Investment</h1><p class="lede" id="inv-lede"></p></div>
+      <div class="actions"><a class="btn" href="#scenarios">Change scenario</a><button class="btn primary" type="button" id="ic-btn">Prepare committee pack</button></div>
+    </div>
+    <div class="restricted" id="inv-restricted" hidden></div>
+    <div class="grid" id="inv-body">
+      <article class="panel span-5" aria-labelledby="alloc-h">
+        <header class="panel-head"><div><h2 id="alloc-h">Allocation and scenario impact</h2><p class="meta" id="alloc-meta"></p></div></header>
+        <div class="table-wrap"><table class="alloc"><thead><tr><th>Asset class</th><th class="r">Weight</th><th class="axis-col">Impact under the scenario</th><th class="r">Return</th></tr></thead><tbody id="alloc"></tbody><tfoot id="alloc-total"></tfoot></table></div>
+      </article>
+      <article class="panel span-7" aria-labelledby="pipe-h">
+        <header class="panel-head"><div><h2 id="pipe-h">Mandate pipeline</h2><p class="meta">From screening to monitoring. Select a mandate to see its due diligence.</p></div></header>
+        <div class="pipeline" id="pipeline"></div>
+      </article>
+      <article class="panel span-8" aria-labelledby="dd-h">
+        <header class="panel-head"><div><h2 id="dd-h">Due diligence: emerging-market local-currency debt</h2><p class="meta">Findings drawn from managers’ documents, screening and Nabd’s scenario engine. Every finding cites its source.</p></div><span class="pill red" id="dd-open"></span></header>
+        <ul class="findings" id="dd"></ul>
+      </article>
+      <article class="panel span-4" aria-labelledby="mgr-h">
+        <header class="panel-head"><div><h2 id="mgr-h">Shortlisted managers</h2><p class="meta">Score out of 100 from the due-diligence model</p></div></header>
+        <ul class="managers" id="mgrs"></ul>
+      </article>
+    </div>
+  </section>
+
+  <!-- ===================== NOWCAST ===================== -->
+  <section class="screen" id="nowcast" hidden>
+    <div class="title-row">
+      <div>
+        <h1>Nowcast</h1>
+        <p class="lede" id="now-lede"></p>
+      </div>
+      <button class="btn primary" type="button" id="note-btn">Draft governor’s note</button>
+    </div>
+    <div class="grid">
+      <article class="panel span-8" aria-labelledby="nc-h">
+        <header class="panel-head">
+          <div><h2 id="nc-h">Current-quarter non-oil growth, year on year</h2><p class="meta">Weekly estimate since 5 Jan 2026. Bands hold 70% and 90% of the model’s uncertainty.</p></div>
+          <div class="seg" role="group" aria-label="Range"><button type="button" aria-pressed="false" data-n="13">3 months</button><button type="button" aria-pressed="false" data-n="26">6 months</button><button type="button" aria-pressed="true" data-n="46">Year to date</button></div>
+        </header>
+        <div class="figure-row">
+          <p class="big num" id="nc-now"></p>
+          <p class="figure-note" id="nc-note"></p>
+        </div>
+        <div class="chart" id="nc-chart"></div>
+        <p class="source">Source: Nabd nowcast, real-time vintages: each point is the estimate as it stood that week. Official first estimates arrive about three months after each quarter ends.</p>
+      </article>
+      <article class="panel span-4" aria-labelledby="news-h">
+        <header class="panel-head"><div><h2 id="news-h">What moved this week</h2><p class="meta" id="news-meta"></p></div></header>
+        <ul class="news" id="news"></ul>
+      </article>
+      <article class="panel span-12" aria-labelledby="feeds-h">
+        <header class="panel-head"><h2 id="feeds-h">Data feeding the nowcast</h2><span class="meta">Payment systems operated or overseen by CBUAE</span></header>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Source</th><th>Measure</th><th class="r">Latest</th><th class="r">As of</th><th>Status</th></tr></thead>
+            <tbody id="feeds"></tbody>
+          </table>
+        </div>
+      </article>
+    </div>
+  </section>
+
+  <!-- ===================== TIME MACHINE ===================== -->
+  <section class="screen" id="time" hidden>
+    <div class="title-row">
+      <div>
+        <h1>Time machine</h1>
+        <p class="lede" id="tm-lede"></p>
+      </div>
+    </div>
+    <div class="grid">
+      <article class="panel span-12" aria-labelledby="tm-h">
+        <header class="panel-head"><div><h2 id="tm-h">What Nabd showed on a past date</h2><p class="meta">Drag to any week of 2026. Nothing after that date is used.</p></div></header>
+        <div class="tm-control">
+          <input type="range" id="tm-week" min="0" max="45" value="10" aria-label="Week">
+          <output id="tm-date" class="num"></output>
+        </div>
+        <div class="tm-body">
+          <div class="chart" id="tm-chart"></div>
+          <div class="tm-read" id="tm-read"></div>
+        </div>
+      </article>
+      <article class="panel span-12" aria-labelledby="tr-h">
+        <header class="panel-head"><div><h2 id="tr-h">Track record against the first official estimate</h2><p class="meta">Nabd’s estimate on the last day of each quarter, before any official data</p></div><div class="kpi-inline" id="tr-kpis"></div></header>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Quarter</th><th class="r">Nabd at quarter end</th><th class="r">First official estimate</th><th class="r">Difference</th><th class="r">Official release</th><th class="r">Nabd ahead by</th></tr></thead>
+            <tbody id="tr"></tbody>
+          </table>
+        </div>
+      </article>
+    </div>
+  </section>
+
+  <!-- ===================== NETWORK ===================== -->
+  <section class="screen" id="network" hidden>
+    <div class="title-row">
+      <div><h1>Network</h1><p class="lede" id="net-lede"></p></div>
+    </div>
+    <div class="grid">
+      <article class="panel span-8" aria-labelledby="web-h">
+        <header class="panel-head">
+          <div><h2 id="web-h">Who pays whom</h2><p class="meta" id="web-meta"></p></div>
+          <div class="legend"><span><i class="sw sw-sys"></i>Systemic firm</span><span><i class="sw sw-stress"></i>Payment stress</span><span><i class="sw sw-dim"></i>Other firms</span></div>
+        </header>
+        <div class="web" id="web" role="img" aria-label="Network of UAE firms by sector with systemic firms highlighted"></div>
+        <div class="slider-row"><label for="week">Week of <output id="week-out" class="num"></output></label><input type="range" id="week" min="0" max="45" value="45"></div>
+        <p class="meta" id="week-meta"></p>
+      </article>
+      <article class="panel span-4" aria-labelledby="sys-h">
+        <header class="panel-head"><h2 id="sys-h">Firms the economy rests on</h2><span class="meta">Top 6 of 142</span></header>
+        <div class="table-wrap"><table><thead><tr><th>Firm</th><th class="r">Output at risk</th><th class="r">Lenders</th></tr></thead><tbody id="sys"></tbody></table></div>
+        <p class="note">Output at risk: the share of non-oil output lost if the firm stops paying its suppliers, traced through the payment network.</p>
+      </article>
+    </div>
+  </section>
+
+  <!-- ===================== FRAUD ===================== -->
+  <section class="screen" id="fraud" hidden>
+    <div class="title-row">
+      <div><h1>Fraud detection</h1><p class="lede" id="fraud-lede"></p></div>
+      <div class="actions"><button class="btn" type="button" id="str-btn">Draft report for the FIU</button><button class="btn primary" type="button" id="alert-btn">Alert the 6 banks</button></div>
+    </div>
+    <div class="restricted" id="fraud-restricted" hidden></div>
+    <div id="fraud-body">
+    <div class="kpis" id="fraud-kpis"></div>
+    <div class="grid">
+      <article class="panel span-8" aria-labelledby="queue-h">
+        <header class="panel-head"><div><h2 id="queue-h">Alert queue across all banks</h2><p class="meta">Top 6 of today’s 37 alerts by risk score</p></div></header>
+        <div class="table-wrap"><table><thead><tr><th>Alert</th><th>Pattern</th><th class="r">Banks</th><th class="r">Value</th><th class="r">Risk score</th><th class="r">Status</th></tr></thead><tbody id="queue"></tbody></table></div>
+      </article>
+      <article class="panel span-4" aria-labelledby="perf-h">
+        <header class="panel-head"><div><h2 id="perf-h">Why the central view matters</h2><p class="meta">Detection over the last 90 days</p></div></header>
+        <div id="perf"></div>
+        <h3 class="sub-h">Patterns, last 30 days</h3>
+        <ul class="hbars" id="typ"></ul>
+      </article>
+    </div>
+    <div class="case-head"><h2>Case R-2611-07 · Suspected mule ring</h2><p class="meta" id="case-lede"></p></div>
+    <div class="grid">
+      <article class="panel span-8" aria-labelledby="ring-h">
+        <header class="panel-head">
+          <div><h2 id="ring-h">Money path, one lane per bank</h2><p class="meta" id="ring-meta"></p></div>
+          <div class="seg" role="group" aria-label="Whose view"><button type="button" aria-pressed="true" data-view="all">Central bank view</button><button type="button" aria-pressed="false" data-view="2">Bank C’s own view</button></div>
+        </header>
+        <div class="lanes" id="lanes"></div>
+      </article>
+      <article class="panel span-4" aria-labelledby="banks-h">
+        <header class="panel-head"><h2 id="banks-h">What each bank sees</h2></header>
+        <div class="table-wrap"><table><thead><tr><th>Bank</th><th class="r">Accounts</th><th class="r">Passed</th><th class="r">Own flags</th></tr></thead><tbody id="banks"></tbody><tfoot id="banks-total"></tfoot></table></div>
+        <p class="note" id="banks-note"></p>
+      </article>
+    </div>
+    </div>
+  </section>
+
+  <!-- ===================== GOVERNANCE ===================== -->
+  <section class="screen" id="gov" hidden>
+    <div class="title-row">
+      <div><h1>Governance</h1><p class="lede" id="gov-lede"></p></div>
+      <button class="btn" type="button">Download audit log</button>
+    </div>
+    <div class="kpis" id="gov-kpis"></div>
+    <div class="grid">
+      <article class="panel span-12" aria-labelledby="models-h">
+        <header class="panel-head"><h2 id="models-h">Where each model runs</h2></header>
+        <div class="table-wrap"><table><thead><tr><th>Model</th><th>Method</th><th>Runs on</th><th>Data it may see</th><th class="r">Last validated</th><th>Owner</th></tr></thead><tbody id="models"></tbody></table></div>
+      </article>
+      <article class="panel span-7" aria-labelledby="audit-h">
+        <header class="panel-head"><h2 id="audit-h">Today’s audit trail</h2></header>
+        <div class="table-wrap"><table><thead><tr><th>Time</th><th>Who</th><th>Action</th><th>Runs on</th><th>Approved by</th></tr></thead><tbody id="audit"></tbody></table></div>
+      </article>
+      <article class="panel span-5" aria-labelledby="roles-h">
+        <header class="panel-head"><h2 id="roles-h">Information barriers</h2><span class="meta">Change “Viewing as” to see them work</span></header>
+        <div class="table-wrap"><table><thead><tr><th>Role</th><th>Firm names</th><th>Fraud cases</th></tr></thead><tbody id="roles"></tbody></table></div>
+      </article>
+    </div>
+  </section>
+</main>
+
+<dialog id="note" aria-labelledby="note-h">
+  <form method="dialog">
+    <header><h2 id="note-h">Governor’s note, 16 November 2026</h2><button class="btn ghost small" value="close">Close</button></header>
+    <div id="note-body"></div>
+    <footer><span class="meta">Drafted from aggregates on Azure UAE North. Figures come from model runs; select one to see its source.</span><button class="btn primary" value="send" id="send-note">Send to Chief Economist</button></footer>
+  </form>
+</dialog>
+<div class="popover" id="pop" role="tooltip" hidden></div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script src="data.js"></script>
+<script src="data2.js"></script>
+<script src="data3.js"></script>
+<script src="charts.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,4 @@
+quarter,real_gdp_yoy,non_oil_yoy,release_date,source_url,source_type,note
+2022Q2,8.0,6.4,2023-12-20,https://www.centralbank.ae/media/vkgbce52/qer-q3-2023-english.pdf,cbuae,"Later vintage: quoted by CBUAE QER as a comparison base, not a first release. Training only, never scored."
+2022Q3,8.3,6.7,2024-03-29,https://centralbank.ae/media/xphj1lek/qer-march-2024-english.pdf,cbuae,"Later vintage: quoted by CBUAE QER as a comparison base, not a first release. Training only, never scored."
+2022Q4,5.5,5.2,2023-09-28,https://www.centralbank.ae/en/research-and-statistics/quarterly-economic-review,cbuae,"Later vintage: quoted by CBUAE QER (2023-09-28) as a comparison base, not a first release. Training only, never scored."

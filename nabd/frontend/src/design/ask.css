@@ -1,0 +1,49 @@
+/* Ask Nabd: a glass sheet on the right, above the tab bar; content stays usable beside it. */
+.dock-sep { width: 0.5px; margin: 8px 2px; background: var(--sep); }
+.ask-tab { border: 0; background: transparent; cursor: pointer; font: inherit; font-size: var(--fs-subhead); font-weight: 600; }
+.ask-tab.on { color: #fff; background: var(--tint); }
+.ask-tab:focus-visible { outline: 3px solid rgba(140,106,63,.55); }
+
+.ask { position: fixed; right: 16px; top: 16px; bottom: 100px; width: min(480px, calc(100vw - 32px)); z-index: 40;
+  display: flex; flex-direction: column; border-radius: 22px; overflow: hidden; background: rgba(255,255,255,.86); }
+.ask-head { flex: none; display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; padding: 14px 16px 10px; border-bottom: 0.5px solid var(--sep); }
+.ask-head h2 { font-size: var(--fs-title3); line-height: 20px; }
+.ask-log { flex: 1; min-height: 0; padding: 12px 16px; display: flex; flex-direction: column; gap: 12px; }
+.ask-msg.user { align-self: flex-end; max-width: 85%; background: var(--tint); color: #fff; padding: 8px 12px; border-radius: 16px 16px 4px 16px; font-size: var(--fs-body); line-height: 18px; }
+.ask-msg.nabd { align-self: stretch; display: grid; gap: 8px; }
+.ask-text { font-size: var(--fs-body); line-height: 19px; display: grid; gap: 6px; }
+.ask-text ul { list-style: disc; padding-left: 18px; display: grid; gap: 4px; }
+.ask-steps { display: grid; gap: 4px; font: 500 var(--fs-subhead)/16px ui-monospace, "SF Mono", Menlo, monospace; color: var(--label-2); }
+.ask-steps li { display: flex; align-items: center; gap: 6px; }
+.ask-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.ask-follow { display: flex; gap: 6px; flex-wrap: wrap; }
+.chip-q { border: 0; padding: 5px 10px; border-radius: 12px; background: var(--fill-2); font: inherit; font-size: var(--fs-callout); font-weight: 500; color: var(--tint-ink); cursor: pointer; text-align: left; }
+.chip-q:hover { background: var(--tint-soft); }
+.ask-ev { background: #fff; border-radius: 12px; padding: 10px 12px; box-shadow: 0 0 0 0.5px rgba(0,0,0,.06); max-height: 280px; overflow: auto; }
+.ask-foot { flex: none; padding: 10px 16px 14px; border-top: 0.5px solid var(--sep); display: grid; gap: 8px; }
+.ask-input { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: end; padding: 6px; border-radius: 14px; background: #fff; box-shadow: 0 0 0 0.5px rgba(0,0,0,.08); }
+.ask-input textarea { border: 0; resize: none; outline: none; font: inherit; font-size: var(--fs-body); line-height: 18px; padding: 4px 6px; background: transparent; }
+
+/* charts */
+.chart-card { margin: 0; background: #fff; border-radius: 12px; padding: 10px 12px 8px; box-shadow: 0 0 0 0.5px rgba(0,0,0,.06); position: relative; }
+.ch-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; margin-bottom: 4px; }
+.ch-head strong { display: block; font-size: var(--fs-callout); line-height: 16px; }
+.ch-legend { display: flex; gap: 12px; flex-wrap: wrap; margin: 2px 0 4px; font-size: var(--fs-subhead); color: var(--label-2); }
+.ch-legend li { display: flex; align-items: center; gap: 5px; }
+.ch-legend i, .ch-tip i { width: 10px; height: 3px; border-radius: 2px; display: inline-block; }
+.ch-plot { position: relative; }
+.ch-plot svg { display: block; overflow: visible; }
+.ch-grid { stroke: rgba(60,60,67,.10); stroke-width: 1; }
+.ch-zero { stroke: rgba(60,60,67,.35); stroke-width: 1; }
+.ch-cross { stroke: rgba(60,60,67,.45); stroke-width: 1; stroke-dasharray: 3 3; }
+.ch-band { fill: rgba(160,102,28,.14); }
+.ch-tick { font-size: 10.5px; fill: var(--label-3); font-family: var(--font); font-variant-numeric: tabular-nums; }
+.ch-direct, .ch-cat, .ch-val { font-size: var(--fs-subhead); fill: var(--label-2); font-family: var(--font); font-variant-numeric: tabular-nums; }
+.ch-val { fill: var(--label); font-weight: 600; }
+.ch-tip { position: absolute; z-index: 2; pointer-events: none; min-width: 150px; background: rgba(255,255,255,.96); border-radius: 10px; padding: 6px 8px; box-shadow: 0 4px 16px rgba(0,0,0,.12), 0 0 0 0.5px rgba(0,0,0,.06); display: grid; gap: 2px; font-size: var(--fs-subhead); }
+.ch-tip span { display: flex; align-items: center; gap: 6px; color: var(--label-2); }
+.ch-tip b { margin-left: auto; color: var(--label); }
+.ch-table { max-height: 200px; overflow: auto; }
+.ch-table td, .ch-table th { padding: 3px 6px; font-size: var(--fs-subhead); }
+
+@media (max-width: 700px) { .ask { left: 16px; right: 16px; width: auto; } }
